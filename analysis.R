@@ -14,6 +14,7 @@ library(permute)
 library(lattice)
 library(ggridges)
 library(ggdist)
+library(wesanderson)
 
 theme_set(theme_bw())
 
@@ -68,18 +69,19 @@ df_languages <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/languages.csv"
                          header=TRUE)
 
 
-# Preprocessing -----------------------------------------------------------
+# Analysis -----------------------------------------------------------
 
 ## Generate list of families
 f_n <- df_languages %>% 
   group_by(Family_Name) %>% 
   summarise(n_l=n()) %>% 
-  filter(n_l > 3)  %>%
-  filter(n_l < 10)  %>%
+  # filter(n_l > 3)  %>%
+  # filter(n_l < 10)  %>%
   filter(n_l > 3)  %>% 
   filter(! Family_Name %in% c("", "Bookkeeping")) %>%
   pull(Family_Name)
 
+## Function for nestendess testing
 nested_test <- function(family_list, 
                         function_type = nestednodf, 
                         shuffling_type = 'r00',
@@ -121,14 +123,13 @@ nested_test <- function(family_list,
     ## Convert to matrix
     df_one_hot_matrix <- as.matrix(df_one_hot[, -1])  # Remove Language_ID 
     rownames(df_one_hot_matrix) <- df_one_hot$Language_ID  # Set row names
-    plot_matrix(df_one_hot)
     
     nrow_ <- nrow(df_one_hot_matrix)
     ncol_ <- ncol(df_one_hot_matrix)
     
     fill <- sum(df_one_hot_matrix) / (nrow_ * ncol_)
     
-    # random matrix of the same shape
+    # REMOVE FOR PROPER TESTING (after pre-reg)
     df_one_hot_matrix <- matrix(rbinom(nrow_ * ncol_, 1, fill),
                                 nrow = nrow_, ncol = ncol_,
                                 dimnames = list(paste0("agent_", LETTERS[1:nrow_]),
@@ -137,29 +138,61 @@ nested_test <- function(family_list,
     print(fam_N)
     # print(df_one_hot_matrix)
     
+    if (identical(function_type, nestednodf)){
+      # bigger NODF -- nestedness
+      # smaller NODF -- no nestedness
+      alt = 'greater'
+    }
+    else{
+      # smaller temperature (0) -- greater nestedness, 
+      # bigger temp (100) -- no nestendess
+      alt = 'less'
+    }
+    
     results <- oecosimu(df_one_hot_matrix, 
                         nestfun=function_type, 
                         method=shuffling_type,
                         parallel=-1,
                         nsimul=n_iter,
-                        alternative='greater')
+                        alternative=alt)
     sim <- results$oecosimu$simulated
     
-    new_rows <- data.frame(
-      Family = rep(fam_N, length(sim)),
-      Measure = rep('NODF', length(sim)),
-      Type = rep('simulated', length(sim)),
-      Value = as.numeric(sim),  # Ensure it's numeric
-      p_value = as.numeric(results$oecosimu$pval[3])
-    )
-    
-    new_rows_real <- data.frame(
-      Family = fam_N,
-      Measure = 'NODF',
-      Type = 'real',
-      Value = as.numeric(results$statistic$statistic[3]),
-      p_value = as.numeric(results$oecosimu$pval[3])
-    )
+    if (identical(function_type, nestednodf)){
+      new_rows <- data.frame(
+        Family = rep(fam_N, length(sim)),
+        Measure = rep('NODF', length(sim)),
+        Type = rep('simulated', length(sim)),
+        Value = as.numeric(sim),  # Ensure it's numeric
+        p_value = as.numeric(results$oecosimu$pval[3])
+      )
+      
+      new_rows_real <- data.frame(
+        Family = fam_N,
+        Measure = 'NODF',
+        Type = 'real',
+        Value = as.numeric(results$statistic$statistic[3]),
+        p_value = as.numeric(results$oecosimu$pval[3])
+      )
+      
+    }
+    else{
+      # if nested-temp
+      new_rows <- data.frame(
+        Family = rep(fam_N, length(sim)),
+        Measure = rep('NODF', length(sim)),
+        Type = rep('simulated', length(sim)),
+        Value = as.numeric(sim),  # Ensure it's numeric
+        p_value = as.numeric(results$oecosimu$pval[1])
+      )
+      
+      new_rows_real <- data.frame(
+        Family = fam_N,
+        Measure = 'NODF',
+        Type = 'real',
+        Value = as.numeric(results$statistic$statistic[1]),
+        p_value = as.numeric(results$oecosimu$pval[1])
+      )
+    }
     
     df_results <- rbind(df_results, new_rows) 
     df_results <- rbind(df_results, new_rows_real) 
@@ -170,19 +203,24 @@ nested_test <- function(family_list,
   
 }
 
+# Results -----------------------------------------------------------------
+
+## Get results
 df_results_nodf_r00 <- nested_test(f_n, 
                                    n_iter=100,
-                                   shuffling_type = 'c0')
-
+                                   shuffling_type = 'c0',
+                                   function_type=nestedtemp)
+## Add singnificance
 df_results_nodf_r00 <- df_results_nodf_r00 %>%
   mutate(significant = p_value < 0.005)
 
-# Create a named vector for Family label colors
+## Create a named vector for Family label colors
 family_colors <- df_results_nodf_r00 %>%
   distinct(Family, significant) %>%
   mutate(color = ifelse(significant, "red", "black")) %>%
   { setNames(.$color, .$Family) }  # Use setNames instead of deframe()
 
+## Figure opt. 1: color of the y-labels based on significance. 
 ggplot(df_results_nodf_r00 %>% filter(Type == 'simulated'), 
        aes(x = Value, y = Family)) +
   stat_pointinterval() +  
@@ -193,7 +231,8 @@ ggplot(df_results_nodf_r00 %>% filter(Type == 'simulated'),
              aes(x = Value, y = Family), 
              color = "blue", size = 3) +  
   theme_minimal() +
-  labs(y = '') +
+  labs(y = '',
+       x = 'NODF') +
   scale_y_discrete(labels = function(f) {
     # Apply color formatting to y-axis labels
     sapply(f, function(label) {
@@ -206,4 +245,27 @@ ggplot(df_results_nodf_r00 %>% filter(Type == 'simulated'),
     })
   }) +
   theme(axis.text.y = ggtext::element_markdown())  
+
+## Figure opt. 2: color of the points based on p value 
+# Define color palette
+pal <- wes_palette("Zissou1", 100, type = "continuous")
+
+# Create plot
+ggplot(df_results_nodf_r00 %>% filter(Type == 'simulated'), 
+       aes(x = Value, y = Family)) +
+  stat_pointinterval() +  
+  xlim(0, 100) +
+  geom_point(data = df_results_nodf_r00 %>% 
+               filter(Type == 'real') %>% 
+               distinct(Family, Value, p_value), 
+             aes(x = Value, y = Family, color = p_value), 
+             size = 3) +  
+  theme_minimal() +
+  labs(y = '',
+       x = 'Temperature') +
+  theme(legend.position = "bottom") +
+  # scale_color_gradient2(low = "red", midpoint = 0.05, 
+  #                       mid = "yellow", high = "blue") +
+  scale_color_gradientn(colors = pal) 
+
 
