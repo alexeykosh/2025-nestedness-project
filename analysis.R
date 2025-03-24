@@ -208,7 +208,7 @@ nested_test <- function(family_list,
 ## Get results
 df_results_nodf_r00 <- nested_test(f_n, 
                                    n_iter=100,
-                                   shuffling_type = 'c0',
+                                   shuffling_type='c0',
                                    function_type=nestedtemp)
 ## Add singnificance
 df_results_nodf_r00 <- df_results_nodf_r00 %>%
@@ -229,10 +229,10 @@ ggplot(df_results_nodf_r00 %>% filter(Type == 'simulated'),
                filter(Type == 'real') %>% 
                distinct(Family, Value), 
              aes(x = Value, y = Family), 
-             color = "blue", size = 3) +  
+             color = "violet", size = 3) +  
   theme_minimal() +
   labs(y = '',
-       x = 'NODF') +
+       x = 'Temperature') +
   scale_y_discrete(labels = function(f) {
     # Apply color formatting to y-axis labels
     sapply(f, function(label) {
