@@ -16,8 +16,8 @@ library(ggtext)
 theme_set(theme_bw())
 
 # Setting main parameters
-ALPHA_ <- 0.6
-N_ITER_ <- 3
+ALPHA_ <- 0.05
+N_ITER_ <- 100
 
 #-------------------------------------------------------------------------------
 # 1. Useful functions 
@@ -135,11 +135,11 @@ nested_test <- function(family_list,
     ###############
     ###############
     # REMOVE FOR PROPER TESTING (after pre-reg)
-    df_one_hot_matrix <- matrix(rbinom(nrow_ * ncol_, 1, fill),
-                                nrow = nrow_, ncol = ncol_,
-                                dimnames = list(paste0("agent_",
-                                                       LETTERS[1:nrow_]),
-                                                paste0("item_", 1:ncol_)))
+    # df_one_hot_matrix <- matrix(rbinom(nrow_ * ncol_, 1, fill),
+    #                             nrow = nrow_, ncol = ncol_,
+    #                             dimnames = list(paste0("agent_",
+    #                                                    LETTERS[1:nrow_]),
+    #                                             paste0("item_", 1:ncol_)))
     ###############
     ###############
     print(fam_N)
@@ -290,6 +290,7 @@ plot_combined <- function(df_obs_final, sim_summary, x_label) {
     arrange(n_langs) %>%
     pull(Family)
   df_obs_final$Family <- factor(df_obs_final$Family, levels = fam_order)
+  sim_summary$Family <- factor(sim_summary$Family, levels = fam_order) 
   # Bullet point for number of significant baselines per family
   bullet_colors <- c("both" = "#009E73", "one" = "#FFA500", "none" = "black")
   axis_labels_df <- df_obs_final %>%
@@ -434,8 +435,6 @@ plot_distribution <- function(df_sim_r00, df_sim_c0, df_obs_r00, x_label,
 }
 
 
-
-
 #-------------------------------------------------------------------------------
 # 2. Loading and processing data
 #-------------------------------------------------------------------------------
@@ -454,6 +453,13 @@ f_n <- df_languages %>%
   filter(n_l > 3)  %>% 
   filter(!Family_Name %in% c("", "Bookkeeping")) %>%
   pull(Family_Name)
+
+df_languages %>% 
+  group_by(Family_Name) %>% 
+  summarise(n_l = n()) %>% 
+  filter(n_l > 3)  %>%
+  filter(!Family_Name %in% c("", "Bookkeeping")) %>%
+  write.csv2(., file='data/summary.csv')
 
 #-------------------------------------------------------------------------------
 # 3. Run Nestedness Tests 
@@ -526,16 +532,23 @@ dist_temp <- plot_distribution(
 #-------------------------------------------------------------------------------
 
 ## Print combined plots for NODF and Temperature
-print(plot_nodf)
-print(plot_temp)
+
+ggsave('nodf_res.png', plot=plot_nodf)
+ggsave('temp_res.png', plot=plot_temp)
 
 # ## Print distribution plots for the entire dataset
 # print(dist_nodf)
 # print(dist_temp)
 
 ## Possible combinations of plots
-dist_nodf / dist_temp
+# dist_nodf / dist_temp
 
+
+df_nodf_r00 %>% filter(Type != 'real') %>%
+  ggplot(aes(x=Value, y=Family)) +
+  geom_point(size=1) +
+  geom_point(data=df_nodf_r00 %>% filter(Type != 'simulated'),
+             aes(x=Value, y=Family, color='red'))
 
 
 
