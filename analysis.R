@@ -290,121 +290,95 @@ plot_combined <- function(df_obs_final, sim_summary, x_label) {
     distinct(Family, n_langs) %>%
     arrange(n_langs) %>%
     pull(Family)
-  
   df_obs_final$Family <- factor(df_obs_final$Family, levels = fam_order)
   sim_summary$Family <- factor(sim_summary$Family, levels = fam_order) 
-  
   # Bullet point for number of significant baselines per family
   bullet_colors <- c("both" = "#009E73", "one" = "#FFA500", "none" = "black")
-  
-  # Create labels with colored bullets using Unicode and color codes
   axis_labels_df <- df_obs_final %>%
     distinct(Family, sig_cat) %>%
-    mutate(
-      bullet = case_when(
-        sig_cat == "both" ~ "\u25CF",   # Black circle
-        sig_cat == "one" ~ "\u25CF",     # Black circle
-        sig_cat == "none" ~ "\u25CF"     # Black circle
-      ),
-      color_code = bullet_colors[sig_cat],
-      label = paste0(Family, " ", bullet)
-    )
-  
-  # Create named vector for labels
+    mutate(label = paste0("<span style='color:black'>", Family, "</span> ",
+                          "<span style='color:", bullet_colors[sig_cat],
+                          "'>&#9679;</span>"))
   labels_vector <- setNames(axis_labels_df$label, axis_labels_df$Family)
-  
-  ## Plot for baseline r00 (no legend)
+  ## Plot for baseline r00
   p_r00 <- ggplot(df_obs_final, aes(x = Value_r00, y = Family)) +
-    geom_segment(
-      data = sim_summary %>% filter(Baseline == "r00"),
-      aes(x = lower, xend = upper, y = Family, yend = Family),
-      color = "#A9A9A9", linewidth = 0.8
-    ) +
-    geom_point(
-      aes(fill = shape_type_r00, shape = shape_type_r00),
-      size = 3.5, color = "black"
-    ) +
-    scale_fill_manual(
-      name = "Significance type",
-      values = c("triangle" = "#64B5F6", "square" = "#FF6961", "circle" = "grey"),
-      labels = c("Nested", "Antinested", "Not significant")
-    ) +
-    scale_shape_manual(
-      name = "Significance type",
-      values = c("triangle" = 24, "square" = 22, "circle" = 21),
-      labels = c("Nested", "Antinested", "Not significant")
-    ) +
+    # Add segments representing simulated intervals for each family
+    geom_segment(data = sim_summary %>% filter(Baseline == "r00"),
+                 aes(x = lower, xend = upper, y = Family, yend = Family),
+                 color = "#A9A9A9", linewidth = 0.8) +
+    # Add observed points with fill and shape based on significance
+    geom_point(aes(fill = shape_type_r00, shape = shape_type_r00),
+               size = 3.5, color = "black") +
+    # Set the different colors
+    scale_fill_manual(name = "Significance type",
+                      values = c("triangle" = "#64B5F6",
+                                 "square" = "#FF6961",
+                                 "circle" = "grey"),
+                      labels = c("triangle" = "Nested",
+                                 "square" = "Antinested",
+                                 "circle" = "Not significant")) +
+    # Set the different shapes
+    scale_shape_manual(name = "Significance type",
+                       values = c("triangle" = 24,
+                                  "square" = 22,
+                                  "circle" = 21),
+                       labels = c("triangle" = "Nested",
+                                  "square" = "Antinested",
+                                  "circle" = "Not significant"))+
+    # Set the axis and legend
     scale_y_discrete(labels = labels_vector) +
-    scale_x_continuous(limits = c(0, 100)) +
     labs(x = x_label, y = "", title = "r00") +
-    theme_minimal() +
-    theme(
-      axis.text.x = element_text(size = 9),
-      axis.text.y = element_text(size = 10, color = axis_labels_df$color_code),
-      plot.title = element_text(hjust = 0.5),
-      legend.position = "none"
-    )
-  
-  ## Plot for baseline c0 (will supply the legend)
-  p_c0 <- ggplot(df_obs_final, aes(x = Value_c0, y = Family)) +
-    geom_segment(
-      data = sim_summary %>% filter(Baseline == "c0"),
-      aes(x = lower, xend = upper, y = Family, yend = Family),
-      color = "#A9A9A9", linewidth = 0.8
-    ) +
-    geom_point(
-      aes(fill = shape_type_c0, shape = shape_type_c0),
-      size = 3.5, color = "black"
-    ) +
-    scale_fill_manual(
-      name = "Significance type",
-      values = c("triangle" = "#64B5F6", "square" = "#FF6961", "circle" = "grey"),
-      labels = c("Nested", "Antinested", "Not significant")
-    ) +
-    scale_shape_manual(
-      name = "Significance type",
-      values = c("triangle" = 24, "square" = 22, "circle" = 21),
-      labels = c("Nested", "Antinested", "Not significant")
-    ) +
     scale_x_continuous(limits = c(0, 100)) +
-    scale_y_discrete(labels = NULL) +
-    labs(x = x_label, title = "c0") +
     theme_minimal() +
-    theme(
-      axis.text.x = element_text(size = 9),
-      axis.title.y = element_blank(),
-      axis.text.y = element_blank(),
-      axis.ticks.y = element_blank(),
-      plot.title = element_text(hjust = 0.5),
-      legend.position = "none"
-    )
-  
-  # Extract legend from p_c0 (the second plot)
-  legend <- get_legend(
-    p_c0 + 
-      theme(legend.position = "bottom") +
-      guides(fill = guide_legend(title = "Significance type"),
-             shape = guide_legend(title = "Significance type"))
-  )
-  
-  # Combine plots (without legend)
-  plots_combined <- plot_grid(
-    p_r00, p_c0,
-    ncol = 2,
-    align = "h",
-    rel_widths = c(1.2, 1)
-  )
-  
-  # Combine plots and legend
-  final_plot <- plot_grid(
-    plots_combined,
-    legend,
-    ncol = 1,
-    rel_heights = c(1, 0.1)
-  )
-  
-  return(final_plot)
+    theme(axis.text.x = element_text(size = 9),
+          axis.text.y = element_markdown(size = 10),
+          plot.title = element_text(hjust = 0.5),
+          legend.position = "none")
+  ## Plot for baseline c0
+  p_c0 <- ggplot(df_obs_final, aes(x = Value_c0, y = Family)) +
+    # Add segments representing simulated intervals for each family
+    geom_segment(data = sim_summary %>% filter(Baseline == "c0"),
+                 aes(x = lower, xend = upper, y = Family, yend = Family),
+                 color = "#A9A9A9", linewidth = 0.8) +
+    # Add observed points with fill and shape based on significance
+    geom_point(aes(fill = shape_type_c0, shape = shape_type_c0),
+               size = 3.5, color = "black") +
+    # Set the different colors
+    scale_fill_manual(name = "Significance type",
+                      values = c("triangle" = "#64B5F6",
+                                 "square" = "#FF6961",
+                                 "circle" = "grey"),
+                      labels = c("triangle" = "Nested",
+                                 "square" = "Antinested",
+                                 "circle" = "Not significant")) +
+    # Set the different shapes
+    scale_shape_manual(name = "Significance type",
+                       values = c("triangle" = 24,
+                                  "square" = 22,
+                                  "circle" = 21),
+                       labels = c("triangle" = "Nested",
+                                  "square" = "Antinested",
+                                  "circle" = "Not significant"))+
+    # No legend for the y axis
+    scale_y_discrete(labels = NULL) +
+    # Set the axis and legend
+    labs(x = x_label, title = "c0") +
+    scale_x_continuous(limits = c(0, 100)) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(size = 9),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          plot.title = element_text(hjust = 0.5),
+          legend.position = "none")
+  # Combine with patchwork
+  combined_plot <- (p_r00 + p_c0) +
+    plot_layout(ncol = 2, guides = "collect") +
+    plot_annotation(theme = theme(plot.title = element_text(hjust = 0.5))) &
+    theme(legend.position = "bottom")
+  return(combined_plot)
 }
+
 
 
 ## Function to plot the Gaussian distribution for the entire dataset
@@ -572,12 +546,14 @@ ggsave('nodf_res_005.png',
        plot=plot_nodf,
        width=14, 
        height=10,
-       scale=0.9)
+       scale=0.9,
+       bg='white')
 ggsave('temp_res_005.png', 
        plot=plot_temp,
        width=14,
        height=10,
-       scale=0.9)
+       scale=0.9,
+       bg='white')
 
 
 
