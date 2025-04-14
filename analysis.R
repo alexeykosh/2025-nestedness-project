@@ -250,17 +250,14 @@ process_real <- function(df_r00, df_c0, measure_label, alpha) {
 }
 
 ## Function to plot combined (r00 and c0) observed data
-plot_combined <- function(df_obs_final, sim_summary, x_label, 
-                          order_data = TRUE, ascending_order = TRUE) {
-  if(order_data) {
-    # Order families according to number of languages
-    fam_order <- df_obs_final %>% 
-      distinct(Family, n_langs) %>% 
-      arrange(if (ascending_order) n_langs else desc(n_langs)) %>% 
-      pull(Family)
-    df_obs_final$Family <- factor(df_obs_final$Family, levels = fam_order)
-    sim_summary$Family <- factor(sim_summary$Family, levels = fam_order)
-  }
+plot_combined <- function(df_obs_final, sim_summary, x_label) {
+  # Reorder families by the number of languages (ascending order)
+  fam_order <- df_obs_final %>%
+    distinct(Family, n_langs) %>%
+    arrange(n_langs) %>%
+    pull(Family)
+  df_obs_final$Family <- factor(df_obs_final$Family, levels = fam_order)
+  sim_summary$Family <- factor(sim_summary$Family, levels = fam_order) 
   # Bullet point for number of significant baselines per family
   bullet_colors <- c("both" = "#009E73", "one" = "#FFA500", "none" = "black")
   axis_labels_df <- df_obs_final %>%
@@ -464,7 +461,6 @@ df_languages %>%
 # write.csv(obs_nodf, "obs_nodf.csv", row.names = FALSE)
 # write.csv(obs_temp, "obs_temp.csv", row.names = FALSE)
 
-
 #-------------------------------------------------------------------------------
 # 4. Dataset Manipulation and Plotting
 #-------------------------------------------------------------------------------
@@ -474,8 +470,7 @@ df_languages %>%
 sim_nodf <- process_simulated(df_nodf_r00, df_nodf_c0)
 obs_nodf <- process_real(df_nodf_r00, df_nodf_c0, "NODF", ALPHA_)
 # Create combined NODF plot 
-plot_nodf <- plot_combined(obs_nodf, sim_nodf$sim_summary, "NODF", 
-                           order_data = TRUE, ascending_order = TRUE)
+plot_nodf <- plot_combined(obs_nodf, sim_nodf$sim_summary, "NODF")
 # Create NODF distribution plot
 dist_nodf <- plot_distribution(
   df_nodf_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
@@ -503,7 +498,7 @@ dist_nodf <- plot_distribution(
 #-------------------------------------------------------------------------------
 
 ## Print combined plots for NODF and Temperature
-# print(plot_nodf)
+print(plot_nodf)
 # ggsave('nodf_res.png', plot=plot_nodf)
 #ggsave('temp_res.png', plot=plot_temp)
 
