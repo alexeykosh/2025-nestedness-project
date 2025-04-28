@@ -18,16 +18,45 @@ library(purrr)
 theme_set(theme_bw())
 
 # Setting main parameters
-ALPHA_ <- 0.05
-N_ITER_ <- 100
+ALPHA_ <- 0.005
+N_ITER_ <- 1000
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# I. NESTEDNESS METRICS ----
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#-------------------------------------------------------------------------------
+# 1. Useful functions 
+#-------------------------------------------------------------------------------
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 1. Useful functions ----
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## Function to sort the matrix by columns and rows sum
+sort_matrix <- function(M, iterations = 100) {
+  for (i in seq_len(iterations)) {
+    if (ncol(M) > 1) {
+      M <- M[, order(colSums(M), decreasing = TRUE)]
+    }
+    if (nrow(M) > 1) {
+      M <- M[order(rowSums(M), decreasing = TRUE), ]
+    }
+  }
+  return(M)
+}
+
+## Function to display matrices
+plot_matrix <- function(mat) {
+  df <- melt(mat)
+  colnames(df) <- c("Language", "Phoneme", "Value")
+  # Keep the order of languages
+  df$Language <- factor(df$Language, levels = rev(rownames(mat)))  
+  ggplot(df, aes(x = Phoneme, y = Language, fill = factor(Value))) +
+    geom_tile(color = "white") +
+    scale_fill_manual(values = c("0" = "cornsilk", "1" = "black"), 
+                      name = "Presence") +
+    labs(x = "Phonemes", y = "Languages") +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      legend.position = 'None')
+}
 
 ## Function for nestedness testing
 nested_test <- function(family_list, 
@@ -105,13 +134,16 @@ nested_test <- function(family_list,
     nrow_ <- nrow(df_one_hot_matrix)
     ncol_ <- ncol(df_one_hot_matrix)
     fill <- sum(df_one_hot_matrix) / (nrow_ * ncol_)
-    ####### REMOVE FOR PROPER TESTING (after pre-reg) ###############
+    ###############
+    ###############
+    # REMOVE FOR PROPER TESTING (after pre-reg)
     # df_one_hot_matrix <- matrix(rbinom(nrow_ * ncol_, 1, fill),
     #                             nrow = nrow_, ncol = ncol_,
     #                             dimnames = list(paste0("agent_",
     #                                                    LETTERS[1:nrow_]),
     #                                             paste0("item_", 1:ncol_)))
-    ####
+    ###############
+    ###############
     print(fam_N)
     results <- oecosimu(df_one_hot_matrix, 
                         nestfun = function_type, 
@@ -296,8 +328,8 @@ plot_combined <- function(df_obs_final, sim_summary, x_label) {
                                   "circle" = "Not significant"))+
     # Set the axis and legend
     scale_y_discrete(labels = labels_vector) +
-    labs(x = x_label, y = "Family", title = "r00") +
-    scale_x_continuous(limits = c(0, NA)) +
+    labs(x = x_label, y = "", title = "r00") +
+    scale_x_continuous(limits = c(0, 100)) +
     theme_minimal() +
     theme(axis.text.x = element_text(size = 9),
           axis.text.y = element_markdown(size = 10),
@@ -332,7 +364,7 @@ plot_combined <- function(df_obs_final, sim_summary, x_label) {
     scale_y_discrete(labels = NULL) +
     # Set the axis and legend
     labs(x = x_label, title = "c0") +
-    scale_x_continuous(limits = c(0, NA)) +
+    scale_x_continuous(limits = c(0, 100)) +
     theme_minimal() +
     theme(axis.text.x = element_text(size = 9),
           axis.title.y = element_blank(),
@@ -349,6 +381,7 @@ plot_combined <- function(df_obs_final, sim_summary, x_label) {
 }
 
 
+
 ## Function to plot the Gaussian distribution for the entire dataset
 plot_distribution <- function(df_sim_r00, df_sim_c0, df_obs_r00, x_label,
                               selected_family, x_lim) {
@@ -363,7 +396,7 @@ plot_distribution <- function(df_sim_r00, df_sim_c0, df_obs_r00, x_label,
   # Extract real value
   real_r00 <- df_obs_r00 %>% filter(Family == selected_family) %>%
     pull(Value_r00)
-  ####
+  #########################################################################
   # Define x-axis range and density sequence
   x_seq <- seq(0, 100, length.out = 200)
   df_density_r00 <- data.frame(
@@ -404,59 +437,57 @@ plot_distribution <- function(df_sim_r00, df_sim_c0, df_obs_r00, x_label,
   return(p_gauss)
 }
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 2. Loading and processing data ----
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Read Phoible data
-df_values <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/values.csv", 
-                      sep = ",", 
-                      header = TRUE)
-df_languages <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/languages.csv", 
-                         sep = ",", 
-                         header = TRUE)
-## Generate list of families 
-f_n <- df_languages %>% 
-  group_by(Family_Name) %>% 
-  summarise(n_l = n()) %>% 
-  filter(n_l > 3)  %>% 
-  filter(!Family_Name %in% c("", "Bookkeeping")) %>%
-  pull(Family_Name)
+#-------------------------------------------------------------------------------
+# 2. Loading and processing data
+#-------------------------------------------------------------------------------
 
-df_languages %>% 
-  group_by(Family_Name) %>% 
-  summarise(n_l = n()) %>% 
-  filter(n_l > 3)  %>%
-  filter(!Family_Name %in% c("", "Bookkeeping")) %>%
-  write.csv2(., file='data/summary.csv')
+# ## Read Phoible data
+# df_values <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/values.csv", 
+#                       sep = ",", 
+#                       header = TRUE)
+# df_languages <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/languages.csv", 
+#                          sep = ",", 
+#                          header = TRUE)
+# ## Generate list of families 
+# f_n <- df_languages %>% 
+#   group_by(Family_Name) %>% 
+#   summarise(n_l = n()) %>% 
+#   filter(n_l > 3)  %>% 
+#   filter(!Family_Name %in% c("", "Bookkeeping")) %>%
+#   pull(Family_Name)
+# 
+# df_languages %>% 
+#   group_by(Family_Name) %>% 
+#   summarise(n_l = n()) %>% 
+#   filter(n_l > 3)  %>%
+#   filter(!Family_Name %in% c("", "Bookkeeping")) %>%
+#   write.csv2(., file='data/summary.csv')
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 3. Run Nestedness Tests ----
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#-------------------------------------------------------------------------------
+# 3. Run Nestedness Tests 
+#-------------------------------------------------------------------------------
 
-df_nodf_c0 <- read.csv("data simulation/100 sim/df_results_nodf_c0_two_sided_small_family.csv")
-df_nodf_r00 <- read.csv("data simulation/100 sim/df_results_nodf_r00_two_sided_small_family.csv")
-
-
-# ## Run NODF tests
+## Run NODF tests
 # # For r00
 # df_nodf_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
 #                            function_type = nestednodf)
-# df_nodf_r00 <- df_nodf_r00 %>% mutate(significant = p_value <= ALPHA_)
 # # For c0
 # df_nodf_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
 #                            function_type = nestednodf)
-# df_nodf_c0  <- df_nodf_c0 %>% mutate(significant = p_value <= ALPHA_)
 # 
 # ## Run Temperature tests
 # # For r00
 # df_temp_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
 #                            function_type = nestedtemp)
-# df_temp_r00 <- df_temp_r00 %>% mutate(significant = p_value <= ALPHA_)
 # # For c0
 # df_temp_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
 #                            function_type = nestedtemp)
-# df_temp_c0  <- df_temp_c0 %>% mutate(significant = p_value <= ALPHA_)
+
+df_temp_c0 <- read.csv("df_temp_c0.csv")
+df_temp_r00 <- read.csv("df_temp_r00.csv")
+df_nodf_c0 <- read.csv("df_nodf_c0.csv")
+df_nodf_r00 <- read.csv("df_nodf_r00.csv")
 
 # # Save simulated datasets results for temp and NODF
 # write.csv(df_temp_c0, "df_temp_c0.csv", row.names = FALSE)
@@ -468,31 +499,37 @@ df_nodf_r00 <- read.csv("data simulation/100 sim/df_results_nodf_r00_two_sided_s
 # write.csv(obs_nodf, "obs_nodf.csv", row.names = FALSE)
 # write.csv(obs_temp, "obs_temp.csv", row.names = FALSE)
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 4. Dataset Manipulation and Plotting ----
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# 
+
+#-------------------------------------------------------------------------------
+# 4. Dataset Manipulation and Plotting
+#-------------------------------------------------------------------------------
 
 ## For NODF
 # Process simulated and observed NODF data
-sim_nodf <- process_simulated(df_nodf_r00, df_nodf_c0)
-obs_nodf <- process_real(df_nodf_r00, df_nodf_c0, "NODF", ALPHA_)
+df_nodf_r00_r <- df_nodf_r00 %>% mutate(significant = p_value <= ALPHA_)
+df_nodf_c0_r  <- df_nodf_c0 %>% mutate(significant = p_value <= ALPHA_)
+sim_nodf <- process_simulated(df_nodf_r00_r, df_nodf_c0_r)
+obs_nodf <- process_real(df_nodf_r00_r, df_nodf_c0_r, "NODF", ALPHA_)
 # Create combined NODF plot 
 plot_nodf <- plot_combined(obs_nodf, sim_nodf$sim_summary, "NODF")
 # Create NODF distribution plot
-dist_nodf <- plot_distribution(
-  df_nodf_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
-  df_nodf_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
-  obs_nodf, "NODF", "Algic", c(20, 65)
-)
+# dist_nodf <- plot_distribution(
+#   df_nodf_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
+#   df_nodf_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
+#   obs_nodf, "NODF", "Algic", c(20, 65)
+# )
 
-
-# ## For Temperature
-# # Process simulated and observed Temperature data
-# sim_temp <- process_simulated(df_temp_r00, df_temp_c0)
-# obs_temp <- process_real(df_temp_r00, df_temp_c0, "Temperature", ALPHA_)
-# # Create combined Temperature plot
-# plot_temp <- plot_combined(obs_temp, sim_temp$sim_summary, "Temperature")
-# # Create Temperature distribution plot
+## For Temperature
+# Process simulated and observed Temperature data
+df_temp_r00_r <- df_temp_r00 %>% mutate(significant = p_value <= ALPHA_)
+df_temp_c0_r  <- df_temp_c0 %>% mutate(significant = p_value <= ALPHA_)
+sim_temp <- process_simulated(df_temp_r00_r, df_temp_c0_r)
+obs_temp <- process_real(df_temp_r00_r, df_temp_c0_r, "Temperature", ALPHA_)
+# Create combined Temperature plot
+plot_temp <- plot_combined(obs_temp, sim_temp$sim_summary, "Temperature")
+# Create Temperature distribution plot
 # dist_temp <- plot_distribution(
 #   df_temp_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
 #   df_temp_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
@@ -500,21 +537,24 @@ dist_nodf <- plot_distribution(
 # )
 
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 5. Display the Plots ----
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#-------------------------------------------------------------------------------
+# 5. Display the Plots
+#-------------------------------------------------------------------------------
 
 ## Print combined plots for NODF and Temperature
-# print(plot_nodf)
-# ggsave('nodf_res.png', plot=plot_nodf)
-# ggsave('temp_res.png', plot=plot_temp)
 
-## Print distribution plots for the entire dataset
-# print(dist_nodf)
-# print(dist_temp)
-
-## Possible combinations of plots
-# dist_nodf / dist_temp
+# ggsave('nodf_res_005.png', 
+#        plot=plot_nodf,
+#        width=14, 
+#        height=10,
+#        scale=0.9,
+#        bg='white')
+# ggsave('temp_res_005.png', 
+#        plot=plot_temp,
+#        width=14,
+#        height=10,
+#        scale=0.9,
+#        bg='white')
 
 
 
