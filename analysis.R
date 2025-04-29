@@ -21,42 +21,14 @@ theme_set(theme_bw())
 ALPHA_ <- 0.005
 N_ITER_ <- 1000
 
-#-------------------------------------------------------------------------------
-# 1. Useful functions 
-#-------------------------------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# I. NESTEDNESS METRICS ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Function to sort the matrix by columns and rows sum
-sort_matrix <- function(M, iterations = 100) {
-  for (i in seq_len(iterations)) {
-    if (ncol(M) > 1) {
-      M <- M[, order(colSums(M), decreasing = TRUE)]
-    }
-    if (nrow(M) > 1) {
-      M <- M[order(rowSums(M), decreasing = TRUE), ]
-    }
-  }
-  return(M)
-}
 
-## Function to display matrices
-plot_matrix <- function(mat) {
-  df <- melt(mat)
-  colnames(df) <- c("Language", "Phoneme", "Value")
-  # Keep the order of languages
-  df$Language <- factor(df$Language, levels = rev(rownames(mat)))  
-  ggplot(df, aes(x = Phoneme, y = Language, fill = factor(Value))) +
-    geom_tile(color = "white") +
-    scale_fill_manual(values = c("0" = "cornsilk", "1" = "black"), 
-                      name = "Presence") +
-    labs(x = "Phonemes", y = "Languages") +
-    theme_minimal() +
-    theme(
-      axis.text.x = element_blank(),
-      axis.ticks.x = element_blank(),
-      axis.text.y = element_blank(),
-      axis.ticks.y = element_blank(),
-      legend.position = 'None')
-}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 1. Useful functions ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## Function for nestedness testing
 nested_test <- function(family_list, 
@@ -134,16 +106,13 @@ nested_test <- function(family_list,
     nrow_ <- nrow(df_one_hot_matrix)
     ncol_ <- ncol(df_one_hot_matrix)
     fill <- sum(df_one_hot_matrix) / (nrow_ * ncol_)
-    ###############
-    ###############
-    # REMOVE FOR PROPER TESTING (after pre-reg)
+    ############ REMOVE FOR PROPER TESTING (after pre-reg) ###############
     # df_one_hot_matrix <- matrix(rbinom(nrow_ * ncol_, 1, fill),
     #                             nrow = nrow_, ncol = ncol_,
     #                             dimnames = list(paste0("agent_",
     #                                                    LETTERS[1:nrow_]),
     #                                             paste0("item_", 1:ncol_)))
-    ###############
-    ###############
+    ####
     print(fam_N)
     results <- oecosimu(df_one_hot_matrix, 
                         nestfun = function_type, 
@@ -396,7 +365,7 @@ plot_distribution <- function(df_sim_r00, df_sim_c0, df_obs_r00, x_label,
   # Extract real value
   real_r00 <- df_obs_r00 %>% filter(Family == selected_family) %>%
     pull(Value_r00)
-  #########################################################################
+  ####
   # Define x-axis range and density sequence
   x_seq <- seq(0, 100, length.out = 200)
   df_density_r00 <- data.frame(
@@ -438,17 +407,17 @@ plot_distribution <- function(df_sim_r00, df_sim_c0, df_obs_r00, x_label,
 }
 
 
-#-------------------------------------------------------------------------------
-# 2. Loading and processing data
-#-------------------------------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 2. Loading and processing data ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# ## Read Phoible data
-# df_values <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/values.csv", 
-#                       sep = ",", 
-#                       header = TRUE)
-# df_languages <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/languages.csv", 
-#                          sep = ",", 
-#                          header = TRUE)
+## Read Phoible data
+df_values <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/values.csv",
+                      sep = ",",
+                      header = TRUE)
+df_languages <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/languages.csv",
+                         sep = ",",
+                         header = TRUE)
 # ## Generate list of families 
 # f_n <- df_languages %>% 
 #   group_by(Family_Name) %>% 
@@ -464,9 +433,9 @@ plot_distribution <- function(df_sim_r00, df_sim_c0, df_obs_r00, x_label,
 #   filter(!Family_Name %in% c("", "Bookkeeping")) %>%
 #   write.csv2(., file='data/summary.csv')
 
-#-------------------------------------------------------------------------------
-# 3. Run Nestedness Tests 
-#-------------------------------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 3. Run Nestedness Tests ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## Run NODF tests
 # # For r00
@@ -484,10 +453,10 @@ plot_distribution <- function(df_sim_r00, df_sim_c0, df_obs_r00, x_label,
 # df_temp_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
 #                            function_type = nestedtemp)
 
-df_temp_c0 <- read.csv("df_temp_c0.csv")
-df_temp_r00 <- read.csv("df_temp_r00.csv")
-df_nodf_c0 <- read.csv("df_nodf_c0.csv")
-df_nodf_r00 <- read.csv("df_nodf_r00.csv")
+df_temp_c0 <- read.csv("data/df_temp_c0.csv")
+df_temp_r00 <- read.csv("data/df_temp_r00.csv")
+df_nodf_c0 <- read.csv("data/df_nodf_c0.csv")
+df_nodf_r00 <- read.csv("data/df_nodf_r00.csv")
 
 # # Save simulated datasets results for temp and NODF
 # write.csv(df_temp_c0, "df_temp_c0.csv", row.names = FALSE)
@@ -500,11 +469,9 @@ df_nodf_r00 <- read.csv("df_nodf_r00.csv")
 # write.csv(obs_temp, "obs_temp.csv", row.names = FALSE)
 
 
-# 
-
-#-------------------------------------------------------------------------------
-# 4. Dataset Manipulation and Plotting
-#-------------------------------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 4. Dataset Manipulation and Plotting ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## For NODF
 # Process simulated and observed NODF data
@@ -537,9 +504,9 @@ plot_temp <- plot_combined(obs_temp, sim_temp$sim_summary, "Temperature")
 # )
 
 
-#-------------------------------------------------------------------------------
-# 5. Display the Plots
-#-------------------------------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 5. Display the Plots ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## Print combined plots for NODF and Temperature
 
@@ -1069,10 +1036,10 @@ austronesian_long_present<- res_austronesian$df_long
 austronesian_merge_segbo <- res_austronesian$merge_segbo
 # only (language, features)
 austronesian_segbo_inter <- res_austronesian$segbo_inter     
-
-## Plot the matrix with its borrowed phonemes
-plot_austronesian <- plot_family_borrowed("Austronesian", df_segbo)
-print(plot_austronesian)
+# 
+# ## Plot the matrix with its borrowed phonemes
+# plot_austronesian <- plot_family_borrowed("Austronesian", df_segbo)
+# print(plot_austronesian)
 
 # ## To save the plot:
 # ggsave(filename = "matrix_borrowings_Austronesian.png",
@@ -1250,6 +1217,7 @@ total_small_borrowings <- nrow(small_segbo_inter)
 cat("Total SegBo borrowings in families with <10 languages:",
     total_small_borrowings, "\n")
 
+
 ## Percentage of borrowings 
 # Select all the present phonemes in the selected families
 all_phoneme_present <- map_dfr(fam_list, function(fam) {
@@ -1309,3 +1277,23 @@ cat(sprintf(
 #     legend.text    = element_text(size = 20)
 #   )
 # 
+
+# ## Plot of the most borrowed phonemes
+# ggplot(
+#   data = all_segbo_inter %>%
+#     count(feature, name = "n_borrowings") %>%   # count borrowings by phoneme
+#     slice_max(n_borrowings, n = 30),            
+#   aes(
+#     x = reorder(feature, n_borrowings),         # reorder for plotting
+#     y = n_borrowings
+#   )
+# ) +
+#   geom_col(fill = "#56B") +
+#   coord_flip() +
+#   labs(
+#     title = "Most borrowed phonemes",
+#     x     = "Phoneme",
+#     y     = "Number of Borrowings"
+#   ) +
+#   theme_minimal(base_size = 14)
+
