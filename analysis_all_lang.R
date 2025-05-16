@@ -32,6 +32,7 @@ selected_combinations <- df_values %>%
   group_by(Language_ID) %>%
   group_modify(~ {
     if (nrow(.x) == 1) {
+      # Only one inventory: keep it
       .x
     } else if (nrow(.x) == 2) {
       # for two inventories: choose the one with fewer phonemes
@@ -57,6 +58,7 @@ selected_combinations <- df_values %>%
   select(Language_ID, Contribution_ID)
 
 ## 1.3 Build the global matrix ----
+# Join back to values and pivot to wide format (one-hot encoding)
 df_selected <- df_values %>%
   inner_join(
     selected_combinations,
@@ -65,13 +67,14 @@ df_selected <- df_values %>%
 
 df_one_hot <- df_selected %>%
   select(Language_ID, Value) %>%
-  mutate(count = 1) %>%
+  mutate(count = 1) %>% # presence as 1
   pivot_wider(
     names_from  = Value,
     values_from = count,
-    values_fill = list(count = 0)
+    values_fill = list(count = 0) # absences with 0
   )
 
+# Convert to matrix with languages as rows, phonemes as columns
 mat_global <- as.matrix(df_one_hot[, -1])
 rownames(mat_global) <- df_one_hot$Language_ID
 
@@ -121,7 +124,7 @@ res_temp_c0 <- oecosimu(
 # III. RESULTS AS DATAFRAMES ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Helper to build a results dataframe from an oecosimu object
+## Fonction to build a results dataframe from an oecosimu object
 build_df <- function(res, measure, stat_index) {
   sims   <- res$oecosimu$simulated
   pval   <- res$oecosimu$pval[stat_index]
@@ -149,13 +152,16 @@ df_temp_c0  <- build_df(res_temp_c0,  "Temperature", 1)
 ## Function to plot the global Gaussian distributions
 plot_distribution_global <- function(df_r00, df_c0,
                                      measure_label, x_label, x_lim) {
+  # Extract simulated values
   sim_r00 <- df_r00 %>% filter(Type == "simulated") %>% pull(Value)
   sim_c0  <- df_c0  %>% filter(Type == "simulated") %>% pull(Value)
+  # Compute mean and sd for each null model
   mean_r00 <- mean(sim_r00); sd_r00 <- sd(sim_r00)
   mean_c0  <- mean(sim_c0);  sd_c0  <- sd(sim_c0)
+  # Extract observed (real) values
   real_r00 <- df_r00 %>% filter(Type == "real") %>% pull(Value)
   real_c0  <- df_c0  %>% filter(Type == "real") %>% pull(Value)
-  
+  # Create a grid for density curves
   x_seq <- seq(x_lim[1], x_lim[2], length.out = 200)
   df_density <- bind_rows(
     data.frame(x = x_seq,
@@ -165,7 +171,7 @@ plot_distribution_global <- function(df_r00, df_c0,
                y = dnorm(x_seq, mean_c0, sd_c0),
                baseline = "c0")
   )
-  
+  # Plot density curves and observed value lines
   ggplot(df_density, aes(x, y, fill = baseline, color = baseline)) +
     geom_area(alpha = 0.3, position = "identity") +
     geom_line(size = 1) +
@@ -206,6 +212,7 @@ dist_nodf_global <- plot_distribution_global(
   x_label       = "NODF",
   x_lim         = range(df_nodf_r00$Value[df_nodf_r00$Type == "simulated"])
 )
+# Save 
 ggsave("dist_nodf_global.png", dist_nodf_global,
        width = 8, height = 6, bg = "white")
 
@@ -216,5 +223,6 @@ dist_temp_global <- plot_distribution_global(
   x_label       = "Temperature",
   x_lim         = range(df_temp_r00$Value[df_temp_r00$Type == "simulated"])
 )
+# Save 
 ggsave("dist_temp_global.png", dist_temp_global,
        width = 8, height = 6, bg = "white")
