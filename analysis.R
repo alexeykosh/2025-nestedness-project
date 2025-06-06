@@ -19,7 +19,7 @@ theme_set(theme_bw())
 
 # Setting main parameters
 ALPHA_ <- 0.005
-N_ITER_ <- 1000
+N_ITER_ <- 10
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # I. NESTEDNESS METRICS ----
@@ -121,23 +121,27 @@ nested_test <- function(family_list,
                         nsimul = n_iter,
                         alternative = alt)
     sim <- results$oecosimu$simulated
+    print(sim)
     if (identical(function_type, nestednodf)) {
       new_rows <- data.frame(
         Family = rep(fam_N, length(sim)),
         Measure = rep('NODF', length(sim)),
         Type = rep('simulated', length(sim)),
-        Value = as.numeric(sim),
-        p_value = as.numeric(results$oecosimu$pval[2]),
+        Value = as.numeric(sim[3,]),
+        p_value = as.numeric(results$oecosimu$pval[3]),
         n_langs = nrow(df_one_hot_matrix)
       )
       new_rows_real <- data.frame(
         Family = fam_N,
         Measure = 'NODF',
         Type = 'real',
-        Value = as.numeric(results$statistic$statistic[2]),
-        p_value = as.numeric(results$oecosimu$pval[2]),
+        Value = as.numeric(results$statistic$statistic[3]),
+        p_value = as.numeric(results$oecosimu$pval[3]),
         n_langs = nrow(df_one_hot_matrix)
       )
+      print(results)
+      print(results$statistic$statistic[3])
+      print(results$oecosimu$pval[3])
     } else {
       # For nested-temp
       new_rows <- data.frame(
@@ -419,32 +423,33 @@ df_languages <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/languages.csv"
                          sep = ",",
                          header = TRUE)
 # ## Generate list of families 
-# f_n <- df_languages %>% 
-#   group_by(Family_Name) %>% 
-#   summarise(n_l = n()) %>% 
-#   filter(n_l > 3)  %>% 
-#   filter(!Family_Name %in% c("", "Bookkeeping")) %>%
-#   pull(Family_Name)
-# 
-# df_languages %>% 
-#   group_by(Family_Name) %>% 
-#   summarise(n_l = n()) %>% 
-#   filter(n_l > 3)  %>%
-#   filter(!Family_Name %in% c("", "Bookkeeping")) %>%
-#   write.csv2(., file='data/summary.csv')
+f_n <- df_languages %>%
+  group_by(Family_Name) %>%
+  summarise(n_l = n()) %>%
+  filter(n_l > 3)  %>%
+  filter(n_l < 10)  %>%
+  filter(!Family_Name %in% c("", "Bookkeeping")) %>%
+  pull(Family_Name)
+
+df_languages %>%
+  group_by(Family_Name) %>%
+  summarise(n_l = n()) %>%
+  filter(n_l > 3)  %>%
+  filter(!Family_Name %in% c("", "Bookkeeping")) %>%
+  write.csv2(., file='data/summary.csv')
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 3. Run Nestedness Tests ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Run NODF tests
-# # For r00
-# df_nodf_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
-#                            function_type = nestednodf)
-# # For c0
-# df_nodf_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
-#                            function_type = nestednodf)
-# 
+# Run NODF tests
+# For r00
+df_nodf_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
+                           function_type = nestednodf)
+# For c0
+df_nodf_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
+                           function_type = nestednodf)
+
 # ## Run Temperature tests
 # # For r00
 # df_temp_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
@@ -453,10 +458,10 @@ df_languages <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/languages.csv"
 # df_temp_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
 #                            function_type = nestedtemp)
 
-df_temp_c0 <- read.csv("data/df_temp_c0.csv")
-df_temp_r00 <- read.csv("data/df_temp_r00.csv")
-df_nodf_c0 <- read.csv("data/df_nodf_c0.csv")
-df_nodf_r00 <- read.csv("data/df_nodf_r00.csv")
+# df_temp_c0 <- read.csv("data/df_temp_c0.csv")
+# df_temp_r00 <- read.csv("data/df_temp_r00.csv")
+# df_nodf_c0 <- read.csv("data/df_nodf_c0.csv")
+# df_nodf_r00 <- read.csv("data/df_nodf_r00.csv")
 
 # # Save simulated datasets results for temp and NODF
 # write.csv(df_temp_c0, "df_temp_c0.csv", row.names = FALSE)
@@ -489,13 +494,13 @@ plot_nodf <- plot_combined(obs_nodf, sim_nodf$sim_summary, "NODF")
 # )
 
 ## For Temperature
-# Process simulated and observed Temperature data
-df_temp_r00_r <- df_temp_r00 %>% mutate(significant = p_value <= ALPHA_)
-df_temp_c0_r  <- df_temp_c0 %>% mutate(significant = p_value <= ALPHA_)
-sim_temp <- process_simulated(df_temp_r00_r, df_temp_c0_r)
-obs_temp <- process_real(df_temp_r00_r, df_temp_c0_r, "Temperature", ALPHA_)
-# Create combined Temperature plot
-plot_temp <- plot_combined(obs_temp, sim_temp$sim_summary, "Temperature")
+# # Process simulated and observed Temperature data
+# df_temp_r00_r <- df_temp_r00 %>% mutate(significant = p_value <= ALPHA_)
+# df_temp_c0_r  <- df_temp_c0 %>% mutate(significant = p_value <= ALPHA_)
+# sim_temp <- process_simulated(df_temp_r00_r, df_temp_c0_r)
+# obs_temp <- process_real(df_temp_r00_r, df_temp_c0_r, "Temperature", ALPHA_)
+# # Create combined Temperature plot
+# plot_temp <- plot_combined(obs_temp, sim_temp$sim_summary, "Temperature")
 # Create Temperature distribution plot
 # dist_temp <- plot_distribution(
 #   df_temp_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
@@ -707,40 +712,9 @@ plot_panel <- function(real_plot, sim_plots, ncol = 2) {
   return(panel)
 }
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 2. Panel for small families matrices ----
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# ## Calculate and rank families by the number of languages
-# families_class <- df_languages %>% 
-#   filter(Family_Name != "", Family_Name != "Bookkeeping") %>%
-#   group_by(Family_Name) %>%
-#   summarise(n_languages = n()) %>%
-#   arrange(desc(n_languages))
-# print(families_class)
-# 
-# ## Select the smallest families 
-# selected_small_families <- families_class$Family_Name[53:70]
-# print(selected_small_families)
-# # For each selected family, extract, sort, and plot the binary matrix
-# small_families_plots <- lapply(selected_small_families, function(fam) {
-#   bin_mat <- get_family_matrix(fam)
-#   sorted_mat <- sort_matrix(bin_mat, iterations = 1000)
-#   plot_matrix(sorted_mat, fam)
-# })
-# # Create a panel
-# panel_small_families <- arrangeGrob(grobs = small_families_plots, ncol = 3)
-# grid.arrange(panel_small_families)
-
-# To save the panel:
-# ggsave(filename = "panel_small_families_matrices.png",
-#        plot = panel_small_families,
-#        width = 10,
-#        height = 8,
-#        dpi = 300)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 3. Panel for big families matrices ----
+# 2. Panel for big families matrices ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # ## Select the biggest families
@@ -763,7 +737,7 @@ plot_panel <- function(real_plot, sim_plots, ncol = 2) {
 #        height = 12, dpi = 300)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 4. Display a single family matrix (unsorted and sorted) ----
+# 3. Display a single family matrix (unsorted and sorted) ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # ## Example : the binary matrix for the family "Uralic"
@@ -780,7 +754,7 @@ plot_panel <- function(real_plot, sim_plots, ncol = 2) {
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 5. Panel of the simulated matrices (r00 and c0) ----
+# 4. Panel of the simulated matrices (r00 and c0) ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ##Simulated matrices for a big family (small variations in nestedness values)##
@@ -819,91 +793,6 @@ plot_panel <- function(real_plot, sim_plots, ncol = 2) {
 #        width = 12,
 #        height = 10,
 #        dpi = 300)
-
-
-##Simulations for a small family (big variations in nestedness values)##
-
-# # Extract and sort the real matrix
-# real_mat_small <- get_family_matrix("Nambiquaran")
-# real_sorted_small <- sort_matrix(real_mat_small, iterations = 1000)
-# p_real_small <- plot_matrix(real_sorted_small, "Nambiquaran")
-# 
-# ## Simulate matrices using the r00 model 
-# set.seed(123)
-# sim_plots_small_r00 <- simulate_r00(real_mat_small, 
-#                                     n_sim = 3, 
-#                                     sort_iter = 1000)
-# panel_small_r00 <- plot_panel(p_real_small, 
-#                               sim_plots_small_r00, 
-#                               ncol = 2)
-# To save the panel: 
-# ggsave(filename = "panel_Nambiquaran_r00.png",
-#        plot = panel_small_r00,
-#        width = 12,
-#        height = 10,
-#        dpi = 300)
-
-# ## Simulate matrices using the c0 model 
-# set.seed(123)
-# sim_plots_small_c0 <- simulate_c0(real_mat_small, 
-#                                   n_sim = 3, 
-#                                   sort_iter = 1000)
-# p_real_small_c0 <- plot_matrix(real_sorted_small, "Nambiquaran")
-# panel_small_c0 <- plot_panel(p_real_small_c0, 
-#                              sim_plots_small_c0, 
-#                              ncol = 2)
-# To save the panel: 
-# ggsave(filename = "panel_Nambiquaran_c0.png",
-#        plot = panel_small_c0,
-#        width = 12,
-#        height = 10,
-#        dpi = 300)
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 6. Details of the nestedness results (nodf + temp) for one family ----
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# # Extract the binary matrix
-# algic_matrix <- get_family_matrix("Algic")
-# # Sort the matrix
-# algic_sorted <- sort_matrix(algic_matrix, iterations = 1000)
-# # Apply nestedness metrics on the binary matrix
-# apply_nestedness_metrics(algic_matrix, algic_sorted)
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 7. Temp results in a dataset to detect hot phonemes for a family ----
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# ## Temperature Results for a family
-# # Extract the binary matrix for "Algic" 
-# algic_matrix <- get_family_matrix("Algic")
-# # Compute the nestedness temperature using the nestedtemp() function
-# algic_temp_result <- nestedtemp(algic_matrix)
-# # Plot the Temp results
-# plot(algic_temp_result, kind = "temperature", col = rev(heat.colors(100)), 
-#      main = "Nestedness Temperature (Algic family)")
-# # Compute nestedtemp and transform it into a dataframe
-# out <- nestedtemp(algic_matrix)
-# temp_algic_data <- as.data.frame(out$u)
-# temp_algic_data$Agent <- rownames(temp_algic_data)
-# # Convert to long format
-# temp_algic_data <- reshape2::melt(my_df, id.vars = "Agent", 
-#                                   variable.name = "Item", 
-#                                   value.name = "Temperature")
-# # Compute metrics
-# item_prevalence <- colSums(algic_matrix)  # Item prevalence
-# agent_inventory <- rowSums(algic_matrix)  # Agent inventory size
-# # Add values to temp_algic_data
-# temp_algic_data$ItemPrevalence <- 
-#   item_prevalence[as.character(temp_algic_data$Item)]
-# temp_algic_data$AgentInventory <- 
-#   agent_inventory[as.character(temp_algic_data$Agent)]
-# # Find corresponding indices in binary_matrix
-# agent_indices <- match(temp_algic_data$Agent, rownames(algic_matrix))
-# item_indices <- match(temp_algic_data$Item, colnames(algic_matrix))
-
-
 
 
 
@@ -1026,16 +915,16 @@ get_family_data <- function(family_name, sort_iter = 1000) {
 # 3. Get segbo data for a family ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Select a family
-res_austronesian         <- get_family_data("Austronesian")
-# Sorted binary presence matrix
-austronesian_df          <- res_austronesian$df_matrix 
-# long-format (present==1)
-austronesian_long_present<- res_austronesian$df_long
-# Full join with SegBo
-austronesian_merge_segbo <- res_austronesian$merge_segbo
-# only (language, features)
-austronesian_segbo_inter <- res_austronesian$segbo_inter     
+# ## Select a family
+# res_austronesian         <- get_family_data("Austronesian")
+# # Sorted binary presence matrix
+# austronesian_df          <- res_austronesian$df_matrix 
+# # long-format (present==1)
+# austronesian_long_present<- res_austronesian$df_long
+# # Full join with SegBo
+# austronesian_merge_segbo <- res_austronesian$merge_segbo
+# # only (language, features)
+# austronesian_segbo_inter <- res_austronesian$segbo_inter     
 # 
 # ## Plot the matrix with its borrowed phonemes
 # plot_austronesian <- plot_family_borrowed("Austronesian", df_segbo)
@@ -1141,159 +1030,4 @@ cat("Total marginal phonemes in Phoible: ", total_marginal,      "\n",
 marginal_loanwords_counts <- marginal_in_segbo %>%
   count(only_loanwords, name = "n") %>%
   arrange(desc(n))
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 6. Some figures for our final dataset ----
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-## Count the number of languages we keep after removing the small families
-n_languages_selected <- df_languages %>%
-  filter(Family_Name %in% fam_list) %>%    # keep only large families
-  distinct(ID) %>%                         # unique language IDs
-  nrow()                                   # count them
-cat("Number of languages in families ≥10 langs:", n_languages_selected, "\n")
-
-## Total number of borrowings across families that we keep
-total_borrowings <- nrow(all_segbo_inter)
-cat("Total overlaps across all families:", total_borrowings, "\n")
-
-## Average number of borrowings per family
-avg_borrowings_family <- fam_overlap %>%
-  summarise(avg_per_family = mean(n_borrowings))
-print(avg_borrowings_family)
-
-## Borrowings by language (only languages with ≥1 borrowing)
-borrowings_per_lang <- all_segbo_inter %>%
-  count(language, name = "n_borrowings")
-## Average only among languages that borrowed at least once
-avg_borrowings_language <- borrowings_per_lang %>%
-  summarise(avg_per_language = mean(n_borrowings))
-print(avg_borrowings_language)
-
-## To include languages with zero borrowings too
-# list all selected languages
-langs_sel <- df_languages %>%
-  filter(Family_Name %in% fam_list) %>%
-  distinct(ID) %>%
-  rename(language = ID)
-# Left-join to assign zero to languages without any borrowings
-borrowings_all_langs <- langs_sel %>%
-  left_join(borrowings_per_lang, by = "language") %>%
-  mutate(n_borrowings = replace_na(n_borrowings, 0L))
-# Compute the true average per language (including zeros)
-avg_borrowings_language_all <- borrowings_all_langs %>%
-  summarise(avg_per_language = mean(n_borrowings))
-print(avg_borrowings_language_all)
-
-
-## Count the number of borrowings we lost by keeping only the big families
-# Identify “small” families (< 10 languages)
-small_fams <- df_languages %>%
-  filter(Family_Name != "", Family_Name != "Bookkeeping") %>%
-  count(Family_Name) %>%
-  filter(n < 10) %>%
-  pull(Family_Name)
-# For each small family, extract its borrowings
-small_segbo_inter <- map_dfr(small_fams, function(fam) {
-  # 1) get the binary phoneme matrix for this family
-  mat <- get_family_matrix(fam, values = df_values, languages = df_languages)
-  # 2) pivot to long and keep only present phonemes
-  df_long <- as.data.frame(mat) %>%
-    rownames_to_column("language") %>%
-    pivot_longer(
-      cols = -language,
-      names_to  = "feature",
-      values_to = "present"
-    ) %>%
-    filter(present == 1) %>%
-    select(language, feature)
-  # 3) keep only those that SegBo marks as borrowings
-  df_long %>%
-    inner_join(df_segbo, by = c("language", "feature")) %>%
-    mutate(family = fam)
-})
-# Total borrowings across all small families
-total_small_borrowings <- nrow(small_segbo_inter)
-cat("Total SegBo borrowings in families with <10 languages:",
-    total_small_borrowings, "\n")
-
-
-## Percentage of borrowings 
-# Select all the present phonemes in the selected families
-all_phoneme_present <- map_dfr(fam_list, function(fam) {
-  mat <- get_family_matrix(fam,
-                           values    = df_values,
-                           languages = df_languages)
-  as.data.frame(mat) %>%
-    rownames_to_column("language") %>%
-    pivot_longer(
-      cols      = -language,
-      names_to  = "feature",
-      values_to = "present"
-    ) %>%
-    filter(present == 1) %>%
-    select(language, feature)
-})
-# Count total present phoneme
-total_present <- nrow(all_phoneme_present)
-# Percentage
-pct_borrowed <- total_borrowings / total_present * 100
-cat(sprintf(
-  "Borrowings are %.2f%% of all phonemes (≥10 langs)\n",
-  pct_borrowed
-))
-
-
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 7. Plots to visualize borrowings ----
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# ## Plot Borrowings vs Family Size
-# ggplot(fam_overlap, aes(x = n_languages, y = n_borrowings)) +
-#   geom_point(size = 3, alpha = 0.7) +
-#   geom_smooth(method = "lm", se = FALSE, linetype = "dashed") +
-#   labs(
-#     x     = "Number of languages in family",
-#     y     = "Number of borrowings (SegBo)",
-#     title = "Borrowings vs. Family Size"
-#   ) +
-#   theme_minimal(base_size = 14)
-# 
-# 
-# ## Plot of annotation of marginal phonemes in segbo
-# ggplot(marginal_loanwords_counts, aes(x = only_loanwords, y = n)) +
-#   geom_col(fill = "steelblue") +
-#   labs(
-#     title = "Annotation of Marginal Phonemes if they appear 'Only in Loanwords'",
-#     x = "OnlyInLoanwords Annotation (Segbo)",
-#     y = "Count of Marginal Phonemes (Phoible)"
-#   ) +
-#   theme_minimal() +
-#   theme(
-#     axis.text.x = element_text(angle = 45, hjust = 1),
-#     legend.title   = element_text(size = 20),
-#     legend.text    = element_text(size = 20)
-#   )
-# 
-
-# ## Plot of the most borrowed phonemes
-# ggplot(
-#   data = all_segbo_inter %>%
-#     count(feature, name = "n_borrowings") %>%   # count borrowings by phoneme
-#     slice_max(n_borrowings, n = 30),            
-#   aes(
-#     x = reorder(feature, n_borrowings),         # reorder for plotting
-#     y = n_borrowings
-#   )
-# ) +
-#   geom_col(fill = "#56B") +
-#   coord_flip() +
-#   labs(
-#     title = "Most borrowed phonemes",
-#     x     = "Phoneme",
-#     y     = "Number of Borrowings"
-#   ) +
-#   theme_minimal(base_size = 14)
 
