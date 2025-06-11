@@ -8,7 +8,7 @@ theme_set(theme_bw())
 
 # Setting main parameters
 ALPHA_ <- 0.005
-N_ITER_ <- 10
+N_ITER_ <- 1000
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # I. ONE GLOBAL MATRIX ----
@@ -20,8 +20,18 @@ df_values <- read.csv(
   sep = ",", header = TRUE
 )
 
+# ## CHOOSE 20 LANGUAGES RANDOMLY TO TEST THE CODE ##
+# set.seed(123) 
+# lang_sample <- df_values %>%
+#   distinct(Language_ID) %>%
+#   slice_sample(n = 10)
+# # Filter the original dataset
+# df_values <- df_values %>%
+#   filter(Language_ID %in% lang_sample$Language_ID)
+
+
 ## 1.2 Select a single inventory per language ----
-# Apply the same logic as in nested_test, but globally
+# Apply the same logic as in nested_test (code for family matrices), but globally
 selected_combinations <- df_values %>%
   group_by(Language_ID, Contribution_ID) %>%
   summarise(
@@ -64,7 +74,6 @@ df_selected <- df_values %>%
     selected_combinations,
     by = c("Language_ID", "Contribution_ID")
   )
-
 df_one_hot <- df_selected %>%
   select(Language_ID, Value) %>%
   mutate(count = 1) %>% # presence as 1
@@ -73,7 +82,6 @@ df_one_hot <- df_selected %>%
     values_from = count,
     values_fill = list(count = 0) # absences with 0
   )
-
 # Convert to matrix with languages as rows, phonemes as columns
 mat_global <- as.matrix(df_one_hot[, -1])
 rownames(mat_global) <- df_one_hot$Language_ID
@@ -100,6 +108,7 @@ res_nodf_c0 <- oecosimu(
   parallel    = -1,
   alternative = "two.sided"
 )
+print(res_nodf_c0$oecosimu$simulated)
 
 ## 2.2 Temperature tests ----
 res_temp_r00 <- oecosimu(
@@ -120,26 +129,29 @@ res_temp_c0 <- oecosimu(
   alternative = "two.sided"
 )
 
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # III. RESULTS AS DATAFRAMES ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## Fonction to build a results dataframe from an oecosimu object
 build_df <- function(res, measure, stat_index) {
-  sims   <- res$oecosimu$simulated
-  pval   <- res$oecosimu$pval[stat_index]
-  real_v <- unname(res$statistic$statistic[stat_index])
+  sim_values <- res$oecosimu$simulated[stat_index, ]
+  pval       <- res$oecosimu$pval[stat_index]
+  real_v     <- res$statistic$statistic[stat_index]
   data.frame(
     Measure = measure,
-    Type    = c(rep("simulated", length(sims)), "real"),
-    Value   = c(sims, real_v),
-    p_value = c(rep(pval, length(sims)), pval)
+    Type    = c(rep("simulated", length(sim_values)), "real"),
+    Value   = c(sim_values, real_v),
+    p_value = c(rep(pval,       length(sim_values)), pval)
   )
 }
 
+
 ## 3.1 NODF results ----
-df_nodf_r00 <- build_df(res_nodf_r00, "NODF", 2)
-df_nodf_c0  <- build_df(res_nodf_c0,  "NODF", 2)
+df_nodf_r00 <- build_df(res_nodf_r00, "NODF", 3)
+df_nodf_c0  <- build_df(res_nodf_c0,  "NODF", 3)
+# The 3 is to select only the p-value for NODF global and not rows / columns
 
 ## 3.2 Temperature results ----
 df_temp_r00 <- build_df(res_temp_r00, "Temperature", 1)
@@ -162,7 +174,7 @@ plot_distribution_global <- function(df_r00, df_c0,
   real_r00 <- df_r00 %>% filter(Type == "real") %>% pull(Value)
   real_c0  <- df_c0  %>% filter(Type == "real") %>% pull(Value)
   # Create a grid for density curves
-  x_seq <- seq(x_lim[1], x_lim[2], length.out = 200)
+  x_seq <- seq(-10, 110, length.out = 300)
   df_density <- bind_rows(
     data.frame(x = x_seq,
                y = dnorm(x_seq, mean_r00, sd_r00),
@@ -200,7 +212,7 @@ plot_distribution_global <- function(df_r00, df_c0,
       x     = x_label,
       y     = "Density"
     ) +
-    scale_x_continuous(limits = x_lim) +
+    scale_x_continuous(limits = c(0,100)) +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5))
 }
@@ -212,9 +224,11 @@ dist_nodf_global <- plot_distribution_global(
   x_label       = "NODF",
   x_lim         = range(df_nodf_r00$Value[df_nodf_r00$Type == "simulated"])
 )
+dist_nodf_global
+
 # Save 
-ggsave("dist_nodf_global.png", dist_nodf_global,
-       width = 8, height = 6, bg = "white")
+# ggsave("dist_nodf_global.png", dist_nodf_global,
+#        width = 8, height = 6, bg = "white")
 
 ## 4.2 Plot and save Temperature distribution ----
 dist_temp_global <- plot_distribution_global(
@@ -223,6 +237,7 @@ dist_temp_global <- plot_distribution_global(
   x_label       = "Temperature",
   x_lim         = range(df_temp_r00$Value[df_temp_r00$Type == "simulated"])
 )
+dist_temp_global
 # Save 
-ggsave("dist_temp_global.png", dist_temp_global,
-       width = 8, height = 6, bg = "white")
+# ggsave("dist_temp_global.png", dist_temp_global,
+#        width = 8, height = 6, bg = "white")
