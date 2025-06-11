@@ -115,33 +115,36 @@ nested_test <- function(family_list,
     ####
     print(fam_N)
     results <- oecosimu(df_one_hot_matrix, 
-                        nestfun = function_type, 
-                        method = shuffling_type,
-                        parallel = -1,
-                        nsimul = n_iter,
+                        nestfun    = function_type, 
+                        method     = shuffling_type,
+                        parallel   = -1,
+                        nsimul     = n_iter,
                         alternative = alt)
-    sim <- results$oecosimu$simulated
-    print(sim)
     if (identical(function_type, nestednodf)) {
+      # Select the third line (global NODF)
+      row_idx     <- 3L
+      sim_global  <- results$oecosimu$simulated[row_idx, ]
+      stat_global <- results$statistic$statistic[row_idx]
+      pval_global <- results$oecosimu$pval[row_idx]
+      n_sim       <- length(sim_global)
+      # simulations
       new_rows <- data.frame(
-        Family = rep(fam_N, length(sim)),
-        Measure = rep('NODF', length(sim)),
-        Type = rep('simulated', length(sim)),
-        Value = as.numeric(sim[3,]),
-        p_value = as.numeric(results$oecosimu$pval[3]),
-        n_langs = nrow(df_one_hot_matrix)
+        Family   = rep(fam_N, n_sim),
+        Measure  = "NODF",
+        Type     = "simulated",
+        Value    = as.numeric(sim_global),
+        p_value  = rep(as.numeric(pval_global), n_sim),
+        n_langs  = rep(nrow(df_one_hot_matrix), n_sim)
       )
+      # Real Value
       new_rows_real <- data.frame(
-        Family = fam_N,
-        Measure = 'NODF',
-        Type = 'real',
-        Value = as.numeric(results$statistic$statistic[3]),
-        p_value = as.numeric(results$oecosimu$pval[3]),
-        n_langs = nrow(df_one_hot_matrix)
+        Family   = fam_N,
+        Measure  = "NODF",
+        Type     = "real",
+        Value    = as.numeric(stat_global),
+        p_value  = as.numeric(pval_global),
+        n_langs  = nrow(df_one_hot_matrix)
       )
-      print(results)
-      print(results$statistic$statistic[3])
-      print(results$oecosimu$pval[3])
     } else {
       # For nested-temp
       new_rows <- data.frame(
@@ -431,12 +434,12 @@ f_n <- df_languages %>%
   filter(!Family_Name %in% c("", "Bookkeeping")) %>%
   pull(Family_Name)
 
-df_languages %>%
-  group_by(Family_Name) %>%
-  summarise(n_l = n()) %>%
-  filter(n_l > 3)  %>%
-  filter(!Family_Name %in% c("", "Bookkeeping")) %>%
-  write.csv2(., file='data/summary.csv')
+# df_languages %>%
+#   group_by(Family_Name) %>%
+#   summarise(n_l = n()) %>%
+#   filter(n_l > 3)  %>%
+#   filter(!Family_Name %in% c("", "Bookkeeping")) %>%
+#   write.csv2(., file='data/summary.csv')
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 3. Run Nestedness Tests ----
@@ -486,6 +489,7 @@ sim_nodf <- process_simulated(df_nodf_r00_r, df_nodf_c0_r)
 obs_nodf <- process_real(df_nodf_r00_r, df_nodf_c0_r, "NODF", ALPHA_)
 # Create combined NODF plot 
 plot_nodf <- plot_combined(obs_nodf, sim_nodf$sim_summary, "NODF")
+plot_nodf
 # Create NODF distribution plot
 # dist_nodf <- plot_distribution(
 #   df_nodf_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
