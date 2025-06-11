@@ -146,6 +146,7 @@ nested_test <- function(family_list,
         n_langs  = nrow(df_one_hot_matrix)
       )
     } else {
+      sim <- results$oecosimu$simulated
       # For nested-temp
       new_rows <- data.frame(
         Family = rep(fam_N, length(sim)),
@@ -497,7 +498,7 @@ plot_nodf
 #   obs_nodf, "NODF", "Algic", c(20, 65)
 # )
 
-## For Temperature
+# # For Temperature
 # # Process simulated and observed Temperature data
 # df_temp_r00_r <- df_temp_r00 %>% mutate(significant = p_value <= ALPHA_)
 # df_temp_c0_r  <- df_temp_c0 %>% mutate(significant = p_value <= ALPHA_)
@@ -505,12 +506,13 @@ plot_nodf
 # obs_temp <- process_real(df_temp_r00_r, df_temp_c0_r, "Temperature", ALPHA_)
 # # Create combined Temperature plot
 # plot_temp <- plot_combined(obs_temp, sim_temp$sim_summary, "Temperature")
-# Create Temperature distribution plot
+# # Create Temperature distribution plot
 # dist_temp <- plot_distribution(
 #   df_temp_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
 #   df_temp_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
 #   obs_temp, "Temperature", "Algic", c(20,65)
 # )
+
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
