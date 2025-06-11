@@ -431,7 +431,6 @@ f_n <- df_languages %>%
   group_by(Family_Name) %>%
   summarise(n_l = n()) %>%
   filter(n_l > 3)  %>%
-  filter(n_l < 10)  %>%
   filter(!Family_Name %in% c("", "Bookkeeping")) %>%
   pull(Family_Name)
 
