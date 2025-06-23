@@ -1,27 +1,184 @@
 # Libraries
-library(dplyr)       
-library(ggplot2)    
-library(tidyr)       
-library(vegan)       
-
-theme_set(theme_bw())
+library(dplyr)
+library(tidyr)
+library(vegan)
+library(ggplot2)
 
 # Setting main parameters
-ALPHA_ <- 0.005
 N_ITER_ <- 1000
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# I. ONE GLOBAL MATRIX ----
+# I. NESTEDNESS METRICS ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## 1.1 Load data ----
-df_values <- read.csv(
-  "data/cldf-datasets-phoible-f36deac/cldf/values.csv",
-  sep = ",", header = TRUE
-)
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 1. Useful functions ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## Function to select one inventory per language (same logic as before)
+select_inventories <- function(df_values) {
+  ## Step 1: Select one inventory per language 
+  selected_combinations <- df_values %>%
+    group_by(Language_ID, Contribution_ID) %>%
+    summarise(
+      phoneme_list = list(unique(Value)),
+      n_phonemes = n_distinct(Value),
+      .groups = 'drop'
+    ) %>%
+    group_by(Language_ID) %>%
+    group_modify(~ {
+      if (nrow(.x) == 1) {
+        ## Only one inventory: keep it
+        return(.x)
+      } else if (nrow(.x) == 2) {
+        ## For 2 inventories: select the one with fewer phonemes 
+        ## random tie-break if equal
+        min_count <- min(.x$n_phonemes)
+        candidates <- .x %>% filter(n_phonemes == min_count)
+        return(candidates %>% slice_sample(n = 1))
+      } else {
+        ## For more than 2 inventories: calculate the degree of overlap
+        ## If equal, select the inventory with fewer phonemes
+        ## random tie-break if still equal
+        overlaps <- sapply(1:nrow(.x), function(i) {
+          sum(sapply(1:nrow(.x), function(j) {
+            if (i != j) {
+              length(intersect(.x$phoneme_list[[i]], .x$phoneme_list[[j]]))
+            } else {
+              0
+            }
+          }))
+        })
+        max_overlap <- max(overlaps)
+        candidates <- .x[overlaps == max_overlap, ]
+        min_count <- min(.x$n_phonemes)
+        candidates <- .x %>% filter(n_phonemes == min_count)
+        return(candidates %>% slice_sample(n = 1))
+      }
+    }) %>%
+    ungroup() %>%
+    select(Language_ID, Contribution_ID)
+  ## Step 2: Retrieve matching rows
+  df_selected <- df_values %>%
+    dplyr::inner_join(selected_combinations,
+                      by = c("Language_ID", "Contribution_ID"))
+  ## Step 3: One-hot encode phonemes
+  df_one_hot <- df_selected %>%
+    dplyr::select(Language_ID, Value) %>%
+    dplyr::mutate(count = 1) %>%
+    tidyr::pivot_wider(
+      names_from   = Value,
+      values_from  = count,
+      values_fill  = list(count = 0)
+    )
+  ## Convert to matrix format
+  df_one_hot_matrix <- as.matrix(df_one_hot[, -1])
+  rownames(df_one_hot_matrix) <- df_one_hot$Language_ID
+  ## Compute dimensions + fill
+  nrow_ <- nrow(df_one_hot_matrix)
+  ncol_ <- ncol(df_one_hot_matrix)
+  fill  <- sum(df_one_hot_matrix) / (nrow_ * ncol_)
+  ## Return everything we need
+  list(
+    selected_combinations = selected_combinations,
+    mat = df_one_hot_matrix,
+    nrow = nrow_,
+    ncol = ncol_,
+    fill = fill
+  )
+}
+
+## Function for nestedness (NODF) testing on the full dataset
+nested_test_nodf_full <- function(df_values, shuffling_type = 'r00') {
+  ## Step 1: select inventories AND build matrix
+  prep   <- select_inventories(df_values)
+  mat    <- prep$mat
+  n_langs <- prep$nrow
+  ## Step 2: simulate
+  res <- oecosimu(mat, nestfun = nestednodf, method = shuffling_type,
+                  nsimul = N_ITER_, parallel = -1)
+  stats <- res$statistic$statistic   # 3 values
+  pvals <- res$oecosimu$pval[3]    
+  ## Step 3: assemble real + simulated
+  # real
+  df_real <- data.frame(
+    Measure = 'NODF',
+    n_langs = n_langs,
+    Baseline = shuffling_type,
+    Type = "real",
+    NODF_columns_Value = stats[1],
+    NODF_rows_Value= stats[2],
+    NODF_global_Value = stats[3],
+    NODF_global_p_value = pvals,
+    stringsAsFactors = TRUE
+  )
+  # simulated
+  sim_mat <- res$oecosimu$simulated
+  df_sim <- as.data.frame(t(sim_mat))
+  colnames(df_sim) <- c("NODF_columns_Value","NODF_rows_Value","NODF_global_Value")
+  df_sim <- df_sim %>%
+    mutate(iter = row_number()) %>%
+    transmute(
+      Measure = 'NODF',
+      n_langs = n_langs,
+      Baseline = shuffling_type,
+      Type = "simulated",
+      NODF_columns_Value,
+      NODF_rows_Value,
+      NODF_global_Value,
+      NODF_global_p_value = pvals
+    )
+  # print(res)
+  # print(sim_mat)
+  return(bind_rows(df_real, df_sim))
+}
+
+## Function for Temperature testing on the full dataset
+nested_test_temp_full <- function(df_values, shuffling_type = 'r00') {
+  ## Step 1: select inventories AND build matrix
+  prep   <- select_inventories(df_values)
+  mat    <- prep$mat
+  n_langs <- prep$nrow
+  ## Step 2: simulate
+  res <- oecosimu(mat, nestfun = nestedtemp, method = shuffling_type,
+                  nsimul = N_ITER_, parallel = -1)
+  stat_t <- res$statistic$statistic[1]
+  p_t  <- res$oecosimu$pval[1]
+  ## Step 3: assemble real + simulated
+  sim <- res$oecosimu$simulated
+  # real
+  df_real <- data.frame(
+    Measure = 'Temperature',
+    n_langs = nrow(mat),
+    Baseline = shuffling_type,
+    Type = rep('simulated', length(sim)),
+    Value = as.numeric(sim),
+    p_value = as.numeric(res$oecosimu$pval[1])
+  )
+  # simulated
+  df_sim <- data.frame(
+    Measure = 'Temperature',
+    n_langs = nrow(mat),
+    Baseline = shuffling_type,
+    Type = 'real',
+    Value = as.numeric(res$statistic$statistic[1]),
+    p_value = as.numeric(res$oecosimu$pval[1])
+  )
+  # print(res)
+  # print(sim)
+  return(bind_rows(df_real, df_sim))
+}
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 2. Loading and processing data ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## Read Phoible data
+df_values <- read.csv("values.csv",
+                      sep = ",", header = TRUE)
 
 # ## CHOOSE 20 LANGUAGES RANDOMLY TO TEST THE CODE ##
-# set.seed(123) 
 # lang_sample <- df_values %>%
 #   distinct(Language_ID) %>%
 #   slice_sample(n = 10)
@@ -29,152 +186,46 @@ df_values <- read.csv(
 # df_values <- df_values %>%
 #   filter(Language_ID %in% lang_sample$Language_ID)
 
-
-## 1.2 Select a single inventory per language ----
-# Apply the same logic as in nested_test (code for family matrices), but globally
-selected_combinations <- df_values %>%
-  group_by(Language_ID, Contribution_ID) %>%
-  summarise(
-    phoneme_list = list(unique(Value)),
-    n_phonemes   = n_distinct(Value),
-    .groups      = "drop"
-  ) %>%
-  group_by(Language_ID) %>%
-  group_modify(~ {
-    if (nrow(.x) == 1) {
-      # Only one inventory: keep it
-      .x
-    } else if (nrow(.x) == 2) {
-      # for two inventories: choose the one with fewer phonemes
-      min_count <- min(.x$n_phonemes)
-      candidates <- filter(.x, n_phonemes == min_count)
-      slice_sample(candidates, n = 1)
-    } else {
-      # for more than two inventories: maximize overlap, then minimize phoneme count
-      overlaps <- sapply(seq_len(nrow(.x)), function(i) {
-        sum(sapply(seq_len(nrow(.x)), function(j) {
-          if (i != j) length(intersect(
-            .x$phoneme_list[[i]], .x$phoneme_list[[j]]
-          )) else 0
-        }))
-      })
-      cand1 <- .x[overlaps == max(overlaps), ]
-      min_count <- min(cand1$n_phonemes)
-      cand2 <- filter(cand1, n_phonemes == min_count)
-      slice_sample(cand2, n = 1)
-    }
-  }) %>%
-  ungroup() %>%
-  select(Language_ID, Contribution_ID)
-
-## 1.3 Build the global matrix ----
-# Join back to values and pivot to wide format (one-hot encoding)
-df_selected <- df_values %>%
-  inner_join(
-    selected_combinations,
-    by = c("Language_ID", "Contribution_ID")
-  )
-df_one_hot <- df_selected %>%
-  select(Language_ID, Value) %>%
-  mutate(count = 1) %>% # presence as 1
-  pivot_wider(
-    names_from  = Value,
-    values_from = count,
-    values_fill = list(count = 0) # absences with 0
-  )
-# Convert to matrix with languages as rows, phonemes as columns
-mat_global <- as.matrix(df_one_hot[, -1])
-rownames(mat_global) <- df_one_hot$Language_ID
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# II. RUN NESTEDNESS TESTS ON GLOBAL MATRIX ----
+# 3. Run tests and write CSVs ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## 2.1 NODF tests ----
-res_nodf_r00 <- oecosimu(
-  mat_global,
-  nestfun     = nestednodf,
-  method      = "r00",
-  nsimul      = N_ITER_,
-  parallel    = -1,
-  alternative = "two.sided"
-)
+# NODF for r00 & c0
+df_nodf_r00 <- nested_test_nodf_full(df_values, shuffling_type = "r00")
+df_nodf_c0  <- nested_test_nodf_full(df_values, shuffling_type = "c0")
 
-res_nodf_c0 <- oecosimu(
-  mat_global,
-  nestfun     = nestednodf,
-  method      = "c0",
-  nsimul      = N_ITER_,
-  parallel    = -1,
-  alternative = "two.sided"
-)
-print(res_nodf_c0$oecosimu$simulated)
+# write.csv(df_nodf_all, "nodf_results_all_lang.csv", row.names = FALSE)
 
-## 2.2 Temperature tests ----
-res_temp_r00 <- oecosimu(
-  mat_global,
-  nestfun     = nestedtemp,
-  method      = "r00",
-  nsimul      = N_ITER_,
-  parallel    = -1,
-  alternative = "two.sided"
-)
-
-res_temp_c0 <- oecosimu(
-  mat_global,
-  nestfun     = nestedtemp,
-  method      = "c0",
-  nsimul      = N_ITER_,
-  parallel    = -1,
-  alternative = "two.sided"
-)
-
+# Temperature for r00 & c0
+df_temp_r00 <- nested_test_temp_full(df_values, shuffling_type = "r00")
+df_temp_c0  <- nested_test_temp_full(df_values, shuffling_type = "c0")
+# 
+# write.csv(df_temp_all, "temp_results_all_lang.csv", row.names = FALSE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# III. RESULTS AS DATAFRAMES ----
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-## Fonction to build a results dataframe from an oecosimu object
-build_df <- function(res, measure, stat_index) {
-  sim_values <- res$oecosimu$simulated[stat_index, ]
-  pval       <- res$oecosimu$pval[stat_index]
-  real_v     <- res$statistic$statistic[stat_index]
-  data.frame(
-    Measure = measure,
-    Type    = c(rep("simulated", length(sim_values)), "real"),
-    Value   = c(sim_values, real_v),
-    p_value = c(rep(pval,       length(sim_values)), pval)
-  )
-}
-
-
-## 3.1 NODF results ----
-df_nodf_r00 <- build_df(res_nodf_r00, "NODF", 3)
-df_nodf_c0  <- build_df(res_nodf_c0,  "NODF", 3)
-# The 3 is to select only the p-value for NODF global and not rows / columns
-
-## 3.2 Temperature results ----
-df_temp_r00 <- build_df(res_temp_r00, "Temperature", 1)
-df_temp_c0  <- build_df(res_temp_c0,  "Temperature", 1)
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# IV. GAUSSIAN DISTRIBUTION PLOT ----
+# 4. Distribution plot ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## Function to plot the global Gaussian distributions
 plot_distribution_global <- function(df_r00, df_c0,
                                      measure_label, x_label, x_lim) {
+  # decide which column holds the values
+  value_col <- if (tolower(measure_label) == "temperature") {
+    "Value"
+  } else {
+    "NODF_global_Value"
+  }
   # Extract simulated values
-  sim_r00 <- df_r00 %>% filter(Type == "simulated") %>% pull(Value)
-  sim_c0  <- df_c0  %>% filter(Type == "simulated") %>% pull(Value)
+  sim_r00 <- df_r00 %>% filter(Type == "simulated") %>% pull(.data[[value_col]])
+  sim_c0  <- df_c0  %>% filter(Type == "simulated") %>% pull(.data[[value_col]])
   # Compute mean and sd for each null model
   mean_r00 <- mean(sim_r00); sd_r00 <- sd(sim_r00)
   mean_c0  <- mean(sim_c0);  sd_c0  <- sd(sim_c0)
   # Extract observed (real) values
-  real_r00 <- df_r00 %>% filter(Type == "real") %>% pull(Value)
-  real_c0  <- df_c0  %>% filter(Type == "real") %>% pull(Value)
+  real_r00 <- df_r00 %>% filter(Type == "real") %>% pull(.data[[value_col]])
+  real_c0  <- df_c0  %>% filter(Type == "real") %>% pull(.data[[value_col]])
   # Create a grid for density curves
-  x_seq <- seq(-10, 110, length.out = 300)
+  x_seq <- seq(x_lim[1], x_lim[2], length.out = 300)
   df_density <- bind_rows(
     data.frame(x = x_seq,
                y = dnorm(x_seq, mean_r00, sd_r00),
@@ -193,12 +244,12 @@ plot_distribution_global <- function(df_r00, df_c0,
       linetype   = "dashed",
       size       = 1.1,
       color      = "red"
-    ) +
-    geom_vline(
-      xintercept = real_c0,
-      linetype   = "dashed",
-      size       = 1.1,
-      color      = "red"
+      # ) +
+      # geom_vline(
+      #   xintercept = real_c0,
+      #   linetype   = "dashed",
+      #   size       = 1.1,
+      #   color      = "red"
     ) +
     scale_fill_manual(
       values = c("r00" = "#56B", "c0" = "orange"),
@@ -217,12 +268,13 @@ plot_distribution_global <- function(df_r00, df_c0,
     theme(plot.title = element_text(hjust = 0.5))
 }
 
+
 ## 4.1 Plot and save NODF distribution ----
 dist_nodf_global <- plot_distribution_global(
   df_nodf_r00, df_nodf_c0,
   measure_label = "NODF",
   x_label       = "NODF",
-  x_lim         = range(df_nodf_r00$Value[df_nodf_r00$Type == "simulated"])
+  x_lim         = c(0, 100)
 )
 dist_nodf_global
 
@@ -235,9 +287,10 @@ dist_temp_global <- plot_distribution_global(
   df_temp_r00, df_temp_c0,
   measure_label = "Temperature",
   x_label       = "Temperature",
-  x_lim         = range(df_temp_r00$Value[df_temp_r00$Type == "simulated"])
+  x_lim         = c(0, 100)
 )
 dist_temp_global
 # Save 
 # ggsave("dist_temp_global.png", dist_temp_global,
 #        width = 8, height = 6, bg = "white")
+

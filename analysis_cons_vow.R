@@ -122,23 +122,32 @@ nested_test <- function(family_list,
                         alternative = alt)
     sim <- results$oecosimu$simulated
     if (identical(function_type, nestednodf)) {
+      # Select the third line (global NODF)
+      row_idx     <- 3
+      sim_global  <- results$oecosimu$simulated[row_idx, ]
+      stat_global <- results$statistic$statistic[row_idx]
+      pval_global <- results$oecosimu$pval[row_idx]
+      n_sim       <- length(sim_global)
+      # simulations
       new_rows <- data.frame(
-        Family = rep(fam_N, length(sim)),
-        Measure = rep('NODF', length(sim)),
-        Type = rep('simulated', length(sim)),
-        Value = as.numeric(sim),
-        p_value = as.numeric(results$oecosimu$pval[2]),
-        n_langs = nrow(df_one_hot_matrix)
+        Family   = rep(fam_N, n_sim),
+        Measure  = "NODF",
+        Type     = "simulated",
+        Value    = as.numeric(sim_global),
+        p_value  = rep(as.numeric(pval_global), n_sim),
+        n_langs  = rep(nrow(df_one_hot_matrix), n_sim)
       )
+      # Real Value
       new_rows_real <- data.frame(
-        Family = fam_N,
-        Measure = 'NODF',
-        Type = 'real',
-        Value = as.numeric(results$statistic$statistic[2]),
-        p_value = as.numeric(results$oecosimu$pval[2]),
-        n_langs = nrow(df_one_hot_matrix)
+        Family   = fam_N,
+        Measure  = "NODF",
+        Type     = "real",
+        Value    = as.numeric(stat_global),
+        p_value  = as.numeric(pval_global),
+        n_langs  = nrow(df_one_hot_matrix)
       )
     } else {
+      sim <- results$oecosimu$simulated
       # For nested-temp
       new_rows <- data.frame(
         Family = rep(fam_N, length(sim)),
@@ -162,7 +171,6 @@ nested_test <- function(family_list,
   }
   return(df_results)
 }
-
 ## Function to process simulated data (for both baselines)
 process_simulated <- function(df_r00, df_c0) {
   df_sim_r00 <- df_r00 %>% filter(Type == "simulated") %>% 
@@ -427,13 +435,6 @@ f_n <- df_languages %>%
   filter(!Family_Name %in% c("", "Bookkeeping")) %>%
   pull(Family_Name)
 
-df_languages %>%
-  group_by(Family_Name) %>%
-  summarise(n_l = n()) %>%
-  filter(n_l > 3)  %>%
-  filter(!Family_Name %in% c("", "Bookkeeping")) %>%
-  write.csv2(., file='data/summary.csv')
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 3. VOWEL: Run Nestedness Tests ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -452,13 +453,13 @@ df_values <- df_values %>%
 
 
 
-# # Run NODF tests
-# # For r00
-# df_nodf_vow_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
-#                            function_type = nestednodf)
-# # For c0
-# df_nodf_vow_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
-#                            function_type = nestednodf)
+# Run NODF tests
+# For r00
+df_nodf_vow_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
+                           function_type = nestednodf)
+# For c0
+df_nodf_vow_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
+                           function_type = nestednodf)
 
 ## Run Temperature tests
 
@@ -473,16 +474,16 @@ df_values <- df_values %>%
 #                            function_type = nestedtemp)
 
 # df_temp_c0 <- read.csv("data/df_temp_c0.csv")
-df_temp_vow_r00 <- read.csv("Dataset consonne vowel/Vowel/df_temp_r00_vow_1000.csv")
-df_nodf_vow_c0 <- read.csv("Dataset consonne vowel/Vowel/df_nodf_c0_vow_1000.csv")
-df_nodf_vow_r00 <- read.csv("Dataset consonne vowel/Vowel/df_nodf_r00_vow_1000.csv")
+# df_temp_vow_r00 <- read.csv("Dataset consonne vowel/Vowel/df_temp_r00_vow_1000.csv")
+# df_nodf_vow_c0 <- read.csv("Dataset consonne vowel/Vowel/df_nodf_c0_vow_1000.csv")
+# df_nodf_vow_r00 <- read.csv("Dataset consonne vowel/Vowel/df_nodf_r00_vow_1000.csv")
 
 
 # # Save simulated datasets results for temp and NODF
 # write.csv(df_temp_vow_c0, "df_temp_c0_vow_1000.csv", row.names = FALSE)
 # write.csv(df_temp_vow_r00, "df_temp_r00_vow_1000.csv", row.names = FALSE)
-# write.csv(df_nodf_vow_c0, "df_nodf_c0_vow_1000.csv", row.names = FALSE)
-# write.csv(df_nodf_vow_r00, "df_nodf_r00_vow_1000.csv", row.names = FALSE)
+write.csv(df_nodf_vow_c0, "df_nodf_c0_vow_1000_new_nodf.csv", row.names = FALSE)
+write.csv(df_nodf_vow_r00, "df_nodf_r00_vow_1000_new_nodf.csv", row.names = FALSE)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -492,7 +493,7 @@ df_nodf_vow_r00 <- read.csv("Dataset consonne vowel/Vowel/df_nodf_r00_vow_1000.c
 ## For NODF
 # Process simulated and observed NODF data
 df_nodf_vow_r00_r <- df_nodf_vow_r00 %>% mutate(significant = p_value <= ALPHA_)
-df_nodf_vow_c0_r  <- df_nodf_c0 %>% mutate(significant = p_value <= ALPHA_)
+df_nodf_vow_c0_r  <- df_nodf_vow_c0 %>% mutate(significant = p_value <= ALPHA_)
 sim_nodf_vow <- process_simulated(df_nodf_vow_r00_r, df_nodf_vow_c0_r)
 obs_nodf_vow <- process_real(df_nodf_vow_r00_r, df_nodf_vow_c0_r, "NODF", ALPHA_)
 # Create combined NODF plot
@@ -504,25 +505,25 @@ dist_nodf <- plot_distribution(
   obs_nodf_vow, "NODF", "Algic", c(20, 65)
 )
 
-## For Temperature
-# Process simulated and observed Temperature data
-df_temp_vow_r00_r <- df_temp_vow_r00 %>% mutate(significant = p_value <= ALPHA_)
-df_temp_vow_c0_r  <- df_temp_vow_c0 %>% mutate(significant = p_value <= ALPHA_)
-sim_temp_vow <- process_simulated(df_temp_vow_r00_r, df_temp_vow_c0_r)
-obs_temp_vow <- process_real(df_temp_vow_r00_r, df_temp_vow_c0_r, "Temperature", ALPHA_)
-# Create combined Temperature plot
-plot_temp_vow <- plot_combined(obs_temp_vow, sim_temp_vow$sim_summary, "Temperature")
-# Create Temperature distribution plot
-dist_temp <- plot_distribution(
-  df_temp_vow_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
-  df_temp_vow_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
-  obs_temp_vow, "Temperature", "Algic", c(20,65)
-)
+# ## For Temperature
+# # Process simulated and observed Temperature data
+# df_temp_vow_r00_r <- df_temp_vow_r00 %>% mutate(significant = p_value <= ALPHA_)
+# df_temp_vow_c0_r  <- df_temp_vow_c0 %>% mutate(significant = p_value <= ALPHA_)
+# sim_temp_vow <- process_simulated(df_temp_vow_r00_r, df_temp_vow_c0_r)
+# obs_temp_vow <- process_real(df_temp_vow_r00_r, df_temp_vow_c0_r, "Temperature", ALPHA_)
+# # Create combined Temperature plot
+# plot_temp_vow <- plot_combined(obs_temp_vow, sim_temp_vow$sim_summary, "Temperature")
+# # Create Temperature distribution plot
+# dist_temp <- plot_distribution(
+#   df_temp_vow_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
+#   df_temp_vow_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
+#   obs_temp_vow, "Temperature", "Algic", c(20,65)
+# )
 
 
-# Save final dataset results for temp and NODF
-write.csv(obs_nodf_vow, "obs_nodf_vow_1000.csv", row.names = FALSE) 
-write.csv(obs_temp_vow, "obs_temp_vow_1000.csv", row.names = FALSE)
+# # Save final dataset results for temp and NODF
+# write.csv(obs_nodf_vow, "obs_nodf_vow_1000.csv", row.names = FALSE) 
+# write.csv(obs_temp_vow, "obs_temp_vow_1000.csv", row.names = FALSE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 5. VOWEL: Display the Plots ----
@@ -530,21 +531,21 @@ write.csv(obs_temp_vow, "obs_temp_vow_1000.csv", row.names = FALSE)
 
 ## Print combined plots for NODF and Temperature
 
-ggsave('nodf_res_1000_vow.png',
+ggsave('nodf_res_1000_vow_new_nodf.png',
        plot=plot_nodf_vow,
        width=14,
        height=10,
        scale=0.9,
        bg='white')
-ggsave('temp_res_vow_1000.png',
-       plot=plot_temp_vow,
-       width=14,
-       height=10,
-       scale=0.9,
-       bg='white')
+# ggsave('temp_res_vow_1000_new_nodf.png',
+#        plot=plot_temp_vow,
+#        width=14,
+#        height=10,
+#        scale=0.9,
+#        bg='white')
 
 
-plot_temp_vow
+# plot_temp_vow
 plot_nodf_vow
 
 
@@ -553,6 +554,11 @@ plot_nodf_vow
 # 6. CONSONANTS: Run Nestedness Tests ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+## Read Phoible data
+df_values <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/values.csv",
+                      sep = ",",
+                      header = TRUE)
+
 ## Select only the consonants
 df_params <- read.csv("data/parameters.csv",
                       header = TRUE, sep = ",")
@@ -560,7 +566,7 @@ df_consonant <- df_params %>%
   filter(SegmentClass == "consonant") %>% 
   select(ID)
 
-## Keep only the vowel in df_values
+## Keep only the consonants in df_values
 df_values <- df_values %>%
   inner_join(df_consonant, by = c("Parameter_ID" = "ID")) %>%
   select(Language_ID, Contribution_ID, Value)
@@ -577,20 +583,20 @@ df_nodf_cons_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
 
 ## Run Temperature tests
 
-# For r00
-df_temp_cons_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
-                               function_type = nestedtemp)
-# For c0
-df_temp_cons_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
-                               function_type = nestedtemp)
+# # For r00
+# df_temp_cons_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
+#                                function_type = nestedtemp)
+# # For c0
+# df_temp_cons_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
+#                                function_type = nestedtemp)
 
 
 
 # Save simulated datasets results for temp and NODF
-write.csv(df_temp_cons_c0, "df_temp_c0_cons_1000.csv", row.names = FALSE)
-write.csv(df_temp_cons_r00, "df_temp_r00_cons_1000.csv", row.names = FALSE)
-write.csv(df_nodf_cons_c0, "df_nodf_c0_cons_1000.csv", row.names = FALSE)
-write.csv(df_nodf_cons_r00, "df_nodf_r00_cons_1000.csv", row.names = FALSE)
+# write.csv(df_temp_cons_c0, "df_temp_c0_cons_1000.csv", row.names = FALSE)
+# write.csv(df_temp_cons_r00, "df_temp_r00_cons_1000.csv", row.names = FALSE)
+write.csv(df_nodf_cons_c0, "df_nodf_c0_cons_1000_new_nodf.csv", row.names = FALSE)
+write.csv(df_nodf_cons_r00, "df_nodf_r00_cons_1000_new_nodf.csv", row.names = FALSE)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -612,25 +618,25 @@ dist_nodf <- plot_distribution(
   obs_nodf_cons, "NODF", "Algic", c(20, 65)
 )
 
-## For Temperature
-# Process simulated and observed Temperature data
-df_temp_cons_r00_r <- df_temp_cons_r00 %>% mutate(significant = p_value <= ALPHA_)
-df_temp_cons_c0_r  <- df_temp_c0 %>% mutate(significant = p_value <= ALPHA_)
-sim_temp_cons <- process_simulated(df_temp_cons_r00_r, df_temp_cons_c0_r)
-obs_temp_cons <- process_real(df_temp_cons_r00_r, df_temp_cons_c0_r, "Temperature", ALPHA_)
-# Create combined Temperature plot
-plot_temp_cons <- plot_combined(obs_temp_cons, sim_temp_cons$sim_summary, "Temperature")
-# Create Temperature distribution plot
-dist_temp <- plot_distribution(
-  df_temp_cons_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
-  df_temp_cons_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
-  obs_temp_cons, "Temperature", "Algic", c(20,65)
-)
+# ## For Temperature
+# # Process simulated and observed Temperature data
+# df_temp_cons_r00_r <- df_temp_cons_r00 %>% mutate(significant = p_value <= ALPHA_)
+# df_temp_cons_c0_r  <- df_temp_c0 %>% mutate(significant = p_value <= ALPHA_)
+# sim_temp_cons <- process_simulated(df_temp_cons_r00_r, df_temp_cons_c0_r)
+# obs_temp_cons <- process_real(df_temp_cons_r00_r, df_temp_cons_c0_r, "Temperature", ALPHA_)
+# # Create combined Temperature plot
+# plot_temp_cons <- plot_combined(obs_temp_cons, sim_temp_cons$sim_summary, "Temperature")
+# # Create Temperature distribution plot
+# dist_temp <- plot_distribution(
+#   df_temp_cons_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
+#   df_temp_cons_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
+#   obs_temp_cons, "Temperature", "Algic", c(20,65)
+# )
 
 
-# Save final dataset results for temp and NODF
-write.csv(obs_nodf_cons, "obs_nodf_cons_1000.csv", row.names = FALSE) 
-write.csv(obs_temp_cons, "obs_temp_cons_1000.csv", row.names = FALSE)
+# # Save final dataset results for temp and NODF
+# write.csv(obs_nodf_cons, "obs_nodf_cons_1000.csv", row.names = FALSE) 
+# write.csv(obs_temp_cons, "obs_temp_cons_1000.csv", row.names = FALSE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 8. CONSONANTS: Display the Plots ----
@@ -638,20 +644,20 @@ write.csv(obs_temp_cons, "obs_temp_cons_1000.csv", row.names = FALSE)
 
 ## Print combined plots for NODF and Temperature
 
-ggsave('nodf_res_1000_cons.png',
+ggsave('nodf_res_1000_cons_new_pval.png',
        plot=plot_nodf_cons,
        width=14,
        height=10,
        scale=0.9,
        bg='white')
-ggsave('temp_res_cons_1000.png',
-       plot=plot_temp_cons,
-       width=14,
-       height=10,
-       scale=0.9,
-       bg='white')
+# ggsave('temp_res_cons_1000.png',
+#        plot=plot_temp_cons,
+#        width=14,
+#        height=10,
+#        scale=0.9,
+#        bg='white')
 
-
-plot_temp_cons
+# 
+# plot_temp_cons
 plot_nodf_cons
 
