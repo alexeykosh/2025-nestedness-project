@@ -192,15 +192,19 @@ df_values <- read.csv("values.csv",
 
 # NODF for r00 & c0
 df_nodf_r00 <- nested_test_nodf_full(df_values, shuffling_type = "r00")
-df_nodf_c0  <- nested_test_nodf_full(df_values, shuffling_type = "c0")
+write.csv(df_nodf_r00, "nodf_results_all_lang_r00.csv", row.names = FALSE)
 
-# write.csv(df_nodf_all, "nodf_results_all_lang.csv", row.names = FALSE)
+df_nodf_c0  <- nested_test_nodf_full(df_values, shuffling_type = "c0")
+write.csv(df_nodf_c0, "nodf_results_all_lang_c0.csv", row.names = FALSE)
+
+
 
 # Temperature for r00 & c0
 df_temp_r00 <- nested_test_temp_full(df_values, shuffling_type = "r00")
+write.csv(df_temp_r00, "temp_results_all_lang_r00.csv", row.names = FALSE)
+
 df_temp_c0  <- nested_test_temp_full(df_values, shuffling_type = "c0")
-# 
-# write.csv(df_temp_all, "temp_results_all_lang.csv", row.names = FALSE)
+write.csv(df_temp_c0, "temp_results_all_lang_c0.csv", row.names = FALSE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 4. Distribution plot ----
