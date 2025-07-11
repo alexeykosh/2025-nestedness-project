@@ -1,4 +1,13 @@
-# Libraries
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ==== Script for the analysis of the nestedness of phonological ====
+# inventories across language families + initial analysis with SegBo 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# This code performs the same analysis as the nestedness analysis of phonological 
+# inventories by language families, but this time using only the consonants or 
+# the vowels
+
+# ==== Libraries ====
 library(dplyr)
 library(ggplot2)
 library(reshape2)

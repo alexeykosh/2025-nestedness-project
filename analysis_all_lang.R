@@ -1,21 +1,40 @@
-# Libraries
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ==== Script for the analysis of the nestedness of phonological ====
+# inventories across the whole phoible dataset as one single matrix 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# This code performs the same analysis as the nestedness analysis of phonological 
+# inventories by language families, but this time using the entire PHOIBLE 
+# dataset combined into a single matrix.
+
+# ==== Libraries ====
 library(dplyr)
 library(tidyr)
 library(vegan)
 library(ggplot2)
 
-# Setting main parameters
+# ==== Setting main parameters ====
+# Number of iterations
 N_ITER_ <- 1000
+# set parallel options to the computer's number of cores minus 2
+options(mc.cores = max(1, parallel::detectCores() - 2))
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # I. NESTEDNESS METRICS ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# In this section, we create the global matrix with all phoible languages.
+# We then calculate the degree of nestedness for this matrix using NODF 
+# and Temperature from the oecosimu package. 
+# Finally, we use baselines and simulations (r00 and c0) to compare our results.
+
+# This section can be run in one go and will compute both Temperature and NODF
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Useful functions ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Function to select one inventory per language (same logic as before)
+## Function to select one inventory per language (same logic as the familiy analysis)
 select_inventories <- function(df_values) {
   ## Step 1: Select one inventory per language 
   selected_combinations <- df_values %>%
@@ -96,7 +115,7 @@ nested_test_nodf_full <- function(df_values, shuffling_type = 'r00') {
   n_langs <- prep$nrow
   ## Step 2: simulate
   res <- oecosimu(mat, nestfun = nestednodf, method = shuffling_type,
-                  nsimul = N_ITER_, parallel = -1)
+                  nsimul = N_ITER_, parallel = TRUE)
   stats <- res$statistic$statistic   # 3 values
   pvals <- res$oecosimu$pval[3]    
   ## Step 3: assemble real + simulated
@@ -141,7 +160,7 @@ nested_test_temp_full <- function(df_values, shuffling_type = 'r00') {
   n_langs <- prep$nrow
   ## Step 2: simulate
   res <- oecosimu(mat, nestfun = nestedtemp, method = shuffling_type,
-                  nsimul = N_ITER_, parallel = -1)
+                  nsimul = N_ITER_, parallel = TRUE)
   stat_t <- res$statistic$statistic[1]
   p_t  <- res$oecosimu$pval[1]
   ## Step 3: assemble real + simulated
@@ -273,7 +292,7 @@ plot_distribution_global <- function(df_r00, df_c0,
 }
 
 
-## 4.1 Plot and save NODF distribution ----
+## Plot and save NODF distribution ----
 dist_nodf_global <- plot_distribution_global(
   df_nodf_r00, df_nodf_c0,
   measure_label = "NODF",
@@ -286,7 +305,7 @@ dist_nodf_global
 # ggsave("dist_nodf_global.png", dist_nodf_global,
 #        width = 8, height = 6, bg = "white")
 
-## 4.2 Plot and save Temperature distribution ----
+## Plot and save Temperature distribution ----
 dist_temp_global <- plot_distribution_global(
   df_temp_r00, df_temp_c0,
   measure_label = "Temperature",

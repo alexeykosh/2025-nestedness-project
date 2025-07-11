@@ -1,4 +1,14 @@
-# Libraries
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ==== Script for the analysis of the nestedness of phonological ====
+# inventories across language families + initial analysis with SegBo 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# This script contains 3 parts:
+# I. Analysis of the nestedness of phonological family inventories
+# II. Visualization of the inventory matrices themselves
+# III. Analysis of borrowings with segbo
+
+# ==== Libraries ====
 library(dplyr)
 library(ggplot2)
 library(reshape2)
@@ -17,7 +27,7 @@ library(purrr)
 
 theme_set(theme_bw())
 
-# Setting main parameters
+# ==== Setting main parameters (alpha + nb of iterations) ====
 ALPHA_ <- 0.005
 N_ITER_ <- 10
 
@@ -25,6 +35,13 @@ N_ITER_ <- 10
 # I. NESTEDNESS METRICS ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# In this section, we create the list of selected language families in order to 
+# build phonological inventory matrices for each family. 
+# We then calculate the degree of nestedness for these families using NODF 
+# and Temperature from the oecosimu package. 
+# Finally, we use baselines and simulations (r00 and c0) to compare our results.
+
+# This section can be run in one go and will compute both Temperature and NODF
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Useful functions ----
@@ -106,7 +123,7 @@ nested_test <- function(family_list,
     nrow_ <- nrow(df_one_hot_matrix)
     ncol_ <- ncol(df_one_hot_matrix)
     fill <- sum(df_one_hot_matrix) / (nrow_ * ncol_)
-    ############ REMOVE FOR PROPER TESTING (after pre-reg) ###############
+    ############ REMOVE FOR PROPER TESTING (after pre-reg, simulations) ########
     # df_one_hot_matrix <- matrix(rbinom(nrow_ * ncol_, 1, fill),
     #                             nrow = nrow_, ncol = ncol_,
     #                             dimnames = list(paste0("agent_",
@@ -114,20 +131,22 @@ nested_test <- function(family_list,
     #                                             paste0("item_", 1:ncol_)))
     ####
     print(fam_N)
+    # Now, compute the simulations + the degree of nestedness using oecosimu 
     results <- oecosimu(df_one_hot_matrix, 
                         nestfun    = function_type, 
                         method     = shuffling_type,
                         parallel   = -1,
                         nsimul     = n_iter,
                         alternative = alt)
+    # For NODF
     if (identical(function_type, nestednodf)) {
-      # Select the third line (global NODF)
-      row_idx     <- 3L
-      sim_global  <- results$oecosimu$simulated[row_idx, ]
-      stat_global <- results$statistic$statistic[row_idx]
-      pval_global <- results$oecosimu$pval[row_idx]
+      # Select the third line of the vector (global NODF)
+      row_idx     <- 3
+      sim_global  <- results$oecosimu$simulated[row_idx, ] # Simulations nodf
+      stat_global <- results$statistic$statistic[row_idx] # Real nodf
+      pval_global <- results$oecosimu$pval[row_idx] # P value nodf
       n_sim       <- length(sim_global)
-      # simulations
+      # simulations rows
       new_rows <- data.frame(
         Family   = rep(fam_N, n_sim),
         Measure  = "NODF",
@@ -136,7 +155,7 @@ nested_test <- function(family_list,
         p_value  = rep(as.numeric(pval_global), n_sim),
         n_langs  = rep(nrow(df_one_hot_matrix), n_sim)
       )
-      # Real Value
+      # Real value row
       new_rows_real <- data.frame(
         Family   = fam_N,
         Measure  = "NODF",
@@ -146,25 +165,28 @@ nested_test <- function(family_list,
         n_langs  = nrow(df_one_hot_matrix)
       )
     } else {
-      sim <- results$oecosimu$simulated
+      sim <- results$oecosimu$simulated # Take all the simulations (simple vector)
       # For nested-temp
+      # Simulations rows
       new_rows <- data.frame(
         Family = rep(fam_N, length(sim)),
         Measure = rep('Temperature', length(sim)),
         Type = rep('simulated', length(sim)),
         Value = as.numeric(sim),
-        p_value = as.numeric(results$oecosimu$pval[1]),
+        p_value = as.numeric(results$oecosimu$pval[1]), # Take the only p-value
         n_langs = nrow(df_one_hot_matrix)
       )
+      # Real row
       new_rows_real <- data.frame(
         Family = fam_N,
         Measure = 'Temperature',
         Type = 'real',
-        Value = as.numeric(results$statistic$statistic[1]),
-        p_value = as.numeric(results$oecosimu$pval[1]),
+        Value = as.numeric(results$statistic$statistic[1]), # Take the only value
+        p_value = as.numeric(results$oecosimu$pval[1]), # Take the only p-value
         n_langs = nrow(df_one_hot_matrix)
       )
     }
+    # Create the final dataframe
     df_results <- rbind(df_results, new_rows)
     df_results <- rbind(df_results, new_rows_real)
   }
@@ -271,6 +293,9 @@ plot_combined <- function(df_obs_final, sim_summary, x_label) {
   df_obs_final$Family <- factor(df_obs_final$Family, levels = fam_order)
   sim_summary$Family <- factor(sim_summary$Family, levels = fam_order) 
   # Bullet point for number of significant baselines per family
+  # Significant for 0 baseline = black
+  # Significant for 1 baseline = yellow
+  # Significant for both baselines = green
   bullet_colors <- c("both" = "#009E73", "one" = "#FFA500", "none" = "black")
   axis_labels_df <- df_obs_final %>%
     distinct(Family, sig_cat) %>%
@@ -289,9 +314,9 @@ plot_combined <- function(df_obs_final, sim_summary, x_label) {
                size = 3.5, color = "black") +
     # Set the different colors
     scale_fill_manual(name = "Significance type",
-                      values = c("triangle" = "#64B5F6",
-                                 "square" = "#FF6961",
-                                 "circle" = "grey"),
+                      values = c("triangle" = "#64B5F6", # Nested
+                                 "square" = "#FF6961", # Antinested
+                                 "circle" = "grey"), # Non significant
                       labels = c("triangle" = "Nested",
                                  "square" = "Antinested",
                                  "circle" = "Not significant")) +
@@ -323,9 +348,9 @@ plot_combined <- function(df_obs_final, sim_summary, x_label) {
                size = 3.5, color = "black") +
     # Set the different colors
     scale_fill_manual(name = "Significance type",
-                      values = c("triangle" = "#64B5F6",
-                                 "square" = "#FF6961",
-                                 "circle" = "grey"),
+                      values = c("triangle" = "#64B5F6", # Nested
+                                 "square" = "#FF6961", # Antinested
+                                 "circle" = "grey"), # Non significant
                       labels = c("triangle" = "Nested",
                                  "square" = "Antinested",
                                  "circle" = "Not significant")) +
@@ -359,7 +384,7 @@ plot_combined <- function(df_obs_final, sim_summary, x_label) {
 
 
 
-## Function to plot the Gaussian distribution for the entire dataset
+## Function to plot the Gaussian distribution 
 plot_distribution <- function(df_sim_r00, df_sim_c0, df_obs_r00, x_label,
                               selected_family, x_lim) {
   ########## CHANGE WHEN ENTIRE DATASET (NOT SELECTED FAMILY) #############
@@ -397,6 +422,8 @@ plot_distribution <- function(df_sim_r00, df_sim_c0, df_obs_r00, x_label,
               linewidth = 1) +
     geom_line(data = df_density_c0, aes(x = x, y = y, color = baseline),
               linewidth = 1) +
+    # r00 simulations in blue
+    # c0 simulations in orange
     scale_fill_manual(values = c("r00" = "#56B", "c0" = "orange"),
                       guide = FALSE) +
     scale_color_manual(name = "Baseline",
@@ -407,7 +434,7 @@ plot_distribution <- function(df_sim_r00, df_sim_c0, df_obs_r00, x_label,
     scale_x_continuous(limits = x_lim) +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5))
-  # Add vertical line for the real value
+  # Add vertical line for the real value in red
   p_gauss <- p_gauss +
     geom_vline(xintercept = real_r00[1], color = "red", linetype = "dashed",
                linewidth = 1)
@@ -426,24 +453,25 @@ df_values <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/values.csv",
 df_languages <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/languages.csv",
                          sep = ",",
                          header = TRUE)
-# ## Generate list of families 
+## Generate list of families with at least 4 languages
 f_n <- df_languages %>%
   group_by(Family_Name) %>%
   summarise(n_l = n()) %>%
+  # Keep the families with more than 3 languages
   filter(n_l > 3)  %>%
+  # Remove strange families
   filter(!Family_Name %in% c("", "Bookkeeping")) %>%
   pull(Family_Name)
-
-# df_languages %>%
-#   group_by(Family_Name) %>%
-#   summarise(n_l = n()) %>%
-#   filter(n_l > 3)  %>%
-#   filter(!Family_Name %in% c("", "Bookkeeping")) %>%
-#   write.csv2(., file='data/summary.csv')
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 3. Run Nestedness Tests ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## To import the datasets with the 1,000 simulations already in github
+# df_temp_c0 <- read.csv("df_temp_c0.csv")
+# df_temp_r00 <- read.csv("df_temp_r00.csv")
+# df_nodf_c0 <- read.csv("df_nodf_c0_new_value.csv")
+# df_nodf_r00 <- read.csv("df_nodf_r00_new_value.csv")
 
 # Run NODF tests
 # For r00
@@ -453,28 +481,21 @@ df_nodf_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
 df_nodf_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
                            function_type = nestednodf)
 
-# ## Run Temperature tests
-# # For r00
-# df_temp_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
-#                            function_type = nestedtemp)
-# # For c0
-# df_temp_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
-#                            function_type = nestedtemp)
+## Run Temperature tests
+# For r00
+df_temp_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
+                           function_type = nestedtemp)
+# For c0
+df_temp_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
+                           function_type = nestedtemp)
 
-# df_temp_c0 <- read.csv("data/df_temp_c0.csv")
-# df_temp_r00 <- read.csv("data/df_temp_r00.csv")
-# df_nodf_c0 <- read.csv("data/df_nodf_c0.csv")
-# df_nodf_r00 <- read.csv("data/df_nodf_r00.csv")
 
-# # Save simulated datasets results for temp and NODF
-# write.csv(df_temp_c0, "df_temp_c0.csv", row.names = FALSE)
-# write.csv(df_temp_r00, "df_temp_r00.csv", row.names = FALSE)
-# write.csv(df_nodf_c0, "df_nodf_c0.csv", row.names = FALSE)
-# write.csv(df_nodf_r00, "df_nodf_r00.csv", row.names = FALSE)
-# 
-# # Save final dataset results for temp and NODF
-# write.csv(obs_nodf, "obs_nodf.csv", row.names = FALSE)
-# write.csv(obs_temp, "obs_temp.csv", row.names = FALSE)
+# Save simulated datasets results for temp + NODF (simulations rows + real rows)
+write.csv(df_temp_c0, "df_temp_c0.csv", row.names = FALSE)
+write.csv(df_temp_r00, "df_temp_r00.csv", row.names = FALSE)
+write.csv(df_nodf_c0, "df_nodf_c0.csv", row.names = FALSE)
+write.csv(df_nodf_r00, "df_nodf_r00.csv", row.names = FALSE)
+
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -482,43 +503,53 @@ df_nodf_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## For NODF
-# Process simulated and observed NODF data
+# Process simulated and observed NODF data (add significance)
 df_nodf_r00_r <- df_nodf_r00 %>% mutate(significant = p_value <= ALPHA_)
 df_nodf_c0_r  <- df_nodf_c0 %>% mutate(significant = p_value <= ALPHA_)
 sim_nodf <- process_simulated(df_nodf_r00_r, df_nodf_c0_r)
 obs_nodf <- process_real(df_nodf_r00_r, df_nodf_c0_r, "NODF", ALPHA_)
 # Create combined NODF plot 
 plot_nodf <- plot_combined(obs_nodf, sim_nodf$sim_summary, "NODF")
-plot_nodf
-# Create NODF distribution plot
-# dist_nodf <- plot_distribution(
-#   df_nodf_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
-#   df_nodf_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
-#   obs_nodf, "NODF", "Algic", c(20, 65)
-# )
-
-# # For Temperature
-# # Process simulated and observed Temperature data
-# df_temp_r00_r <- df_temp_r00 %>% mutate(significant = p_value <= ALPHA_)
-# df_temp_c0_r  <- df_temp_c0 %>% mutate(significant = p_value <= ALPHA_)
-# sim_temp <- process_simulated(df_temp_r00_r, df_temp_c0_r)
-# obs_temp <- process_real(df_temp_r00_r, df_temp_c0_r, "Temperature", ALPHA_)
-# # Create combined Temperature plot
-# plot_temp <- plot_combined(obs_temp, sim_temp$sim_summary, "Temperature")
-# # Create Temperature distribution plot
-# dist_temp <- plot_distribution(
-#   df_temp_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
-#   df_temp_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
-#   obs_temp, "Temperature", "Algic", c(20,65)
-# )
 
 
+# Create NODF distribution plot for a selected family
+dist_nodf <- plot_distribution(
+  df_nodf_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
+  df_nodf_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
+  obs_nodf, "NODF", "Algic", c(20, 65)
+)
+
+
+## For Temperature
+# Process simulated and observed Temperature data (add significance)
+df_temp_r00_r <- df_temp_r00 %>% mutate(significant = p_value <= ALPHA_)
+df_temp_c0_r  <- df_temp_c0 %>% mutate(significant = p_value <= ALPHA_)
+sim_temp <- process_simulated(df_temp_r00_r, df_temp_c0_r)
+obs_temp <- process_real(df_temp_r00_r, df_temp_c0_r, "Temperature", ALPHA_)
+# Create combined Temperature plot
+plot_temp <- plot_combined(obs_temp, sim_temp$sim_summary, "Temperature")
+plot_temp 
+
+# Create Temperature distribution plot for a selected family
+dist_temp <- plot_distribution(
+  df_temp_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
+  df_temp_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
+  obs_temp, "Temperature", "Algic", c(20,65)
+)
+
+# Display the plots
+plot_nodf 
+plot_temp
+
+# Save final dataset results for temp and NODF
+write.csv(obs_nodf, "obs_nodf.csv", row.names = FALSE)
+write.csv(obs_temp, "obs_temp.csv", row.names = FALSE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 5. Display the Plots ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Print combined plots for NODF and Temperature
+## Save combined plots for NODF and Temperature
 
 # ggsave('nodf_res_005.png', 
 #        plot=plot_nodf,
@@ -543,19 +574,23 @@ plot_nodf
 #  II. MATRIX ANALYSIS AND VISUALISATION ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# This section displays the phonological inventory matrices.
 # Some of these functions / bits of code are not essential for the final analysis
-# and can be deleted (I just wanted to see how we can manipulate matrices)
+# and can be deleted 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Function Definitions ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Function to sort a matrix 
+## Function to sort a matrix by rows and columns sums
 sort_matrix <- function(M, iterations = 100) {
+  # Perform iterative sorting to stabilize the order
   for (i in seq_len(iterations)) {
+    # Sort columns in decreasing order of their sums (most 1s first)
     if (ncol(M) > 1) {
       M <- M[, order(colSums(M), decreasing = TRUE)]
     }
+    # Sort rows in decreasing order of their sums (most 1s first)
     if (nrow(M) > 1) {
       M <- M[order(rowSums(M), decreasing = TRUE), ]
     }
@@ -565,11 +600,17 @@ sort_matrix <- function(M, iterations = 100) {
 
 ## Function to plot a matrix
 plot_matrix <- function(mat, title = "") {
+  # Convert the matrix to long format for ggplot
   df <- melt(mat)
+  # Rename the columns for clarity
   colnames(df) <- c("Language", "Phoneme", "Value")
+  # Reverse the order of languages so they display top-to-bottom in the plot
   df$Language <- factor(df$Language, levels = rev(rownames(mat)))
+  # Create the plot
   p <- ggplot(df, aes(x = Phoneme, y = Language, fill = factor(Value))) +
+    # Draw tiles for each matrix cell
     geom_tile(color= "white") +
+    # colors: 0 = beige, 1 = black
     scale_fill_manual(values = c("0" = "cornsilk", "1" = "black"),
                       guide = "none") +
     labs(x = "", y = "", title = title) +
@@ -583,29 +624,14 @@ plot_matrix <- function(mat, title = "") {
   return(p)
 }
 
-## Function to apply nestedness metrics on a binary matrix
-apply_nestedness_metrics <- function(binary_matrix, sorted_matrix) {
-  # Temperature
-  cat("\nNestedtemp results on the binary matrix:\n")
-  nested_result_temp_bin <- nestedtemp(binary_matrix)
-  print(nested_result_temp_bin)
-  # NODF
-  cat("\nNestednodf results on the binary matrix (ordered = TRUE):\n")
-  nested_result_nodf_bin_true <- nestednodf(binary_matrix, 
-                                            order = TRUE, 
-                                            weighted = FALSE, 
-                                            wbinary = FALSE)
-  print(nested_result_nodf_bin_true)
-}
-
 
 ## Function to extract the binary matrix for a family 
 get_family_matrix <- function(family_name, 
                               values = df_values, 
                               languages = df_languages) {
-  ## Step 1: Select languages
+  ## Step 1: Select languages (the same as for the nestedness analysis in I.)
   lgs <- languages$ID[languages$Family_Name == family_name]
-  ## Step 2: Select one inventory per language (same as the nestedness function)
+  ## Step 2: Select one inventory per language 
   selected_contributions <- values %>%
     filter(Language_ID %in% lgs) %>%
     group_by(Language_ID, Contribution_ID) %>%
@@ -802,29 +828,39 @@ plot_panel <- function(real_plot, sim_plots, ncol = 2) {
 
 
 
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # III. OVERLAP SEGBO ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# This section performs the overlap between the dataset used for the nestedness 
+# analysis in section I and the SegBo dataset, allowing us to identify borrowed 
+# phonemes within phonological inventories.
+
+# This analysis is not complete, and this code mainly serves to determine 
+# the number of borrowings in the overlap, as well as to gather additional 
+# information, without deeply analyzing the contribution of borrowings 
+# to nestedness.
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Load SegBo dataset ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# Import segbo dataset
 df_segbo <- read.csv(
   "data/SegBo database - Phonemes.csv",
-  sep               = ",",
-  header            = TRUE,
+  sep  = ",",
+  header   = TRUE,
   stringsAsFactors  = FALSE
 ) %>%
   rename(
-    language        = BorrowingLanguageGlottocode,
-    feature         = BorrowedSound,
+    language = BorrowingLanguageGlottocode,
+    feature  = BorrowedSound,
     only_loanwords  = OnlyInLoanwords,
-    result          = Result,
+    result  = Result,
     new_distinction = NewDistinction,
-    comments        = PhonemeComments,
-    verified        = Verified
+    comments  = PhonemeComments,
+    verified   = Verified
   ) %>%
   mutate(borrowed = 1L)
 
@@ -866,7 +902,7 @@ plot_family_borrowed <- function(family_name, df_segbo, sort_iter = 1000) {
     scale_fill_manual(
       values = c("absent" = "cornsilk",
                  "present" = "grey",
-                 "borrowed"= "red"),
+                 "borrowed"= "red"), # borrowed phonemes in red
       guide = "none"
     ) +
     # labels and theme
@@ -882,7 +918,7 @@ plot_family_borrowed <- function(family_name, df_segbo, sort_iter = 1000) {
     )
 }
 
-## Function to retrieve various datasets for a given language family
+## Function to retrieve various datasets about borrowings for a given family
 get_family_data <- function(family_name, sort_iter = 1000) {
   # 1) Extract the matrix and sort it
   mat        <- get_family_matrix(family_name)
@@ -917,18 +953,18 @@ get_family_data <- function(family_name, sort_iter = 1000) {
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 3. Get segbo data for a family ----
+# 3. Get segbo data overlap for a family ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# ## Select a family
-# res_austronesian         <- get_family_data("Austronesian")
+# ## Select a family and get its matrix
+# res_austronesian   <- get_family_data("Austronesian")
 # # Sorted binary presence matrix
-# austronesian_df          <- res_austronesian$df_matrix 
+# austronesian_df       <- res_austronesian$df_matrix 
 # # long-format (present==1)
 # austronesian_long_present<- res_austronesian$df_long
 # # Full join with SegBo
 # austronesian_merge_segbo <- res_austronesian$merge_segbo
-# # only (language, features)
+# # keep only (language, features)
 # austronesian_segbo_inter <- res_austronesian$segbo_inter     
 # 
 # ## Plot the matrix with its borrowed phonemes
@@ -946,7 +982,7 @@ get_family_data <- function(family_name, sort_iter = 1000) {
 # 4. Create the full dataset overlap Segbo / Phoible ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## (Re)load Phoible data
+## (Re)load Phoible data if necessary
 df_values <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/values.csv",
                       sep = ",",
                       header = TRUE)
@@ -954,7 +990,8 @@ df_languages <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/languages.csv"
                          sep = ",",
                          header = TRUE)
 
-## list of families that have at least 10 languages
+## list of families that have at least 10 languages 
+## (otherwise not enough statistical power to study borrowings)
 fam_list <- df_languages %>%
   filter(Family_Name != "", Family_Name != "Bookkeeping") %>%
   count(Family_Name) %>%
@@ -1000,10 +1037,13 @@ fam_overlap <- big_families %>%
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 5. Marginal phonemes vs segbo presence ----
+# 5. Marginal phonemes in Phoible vs segbo presence ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# turn the marginal column into TRUE/FALSE
+# We want to study the phonemes marked as marginal in the phoible dataset 
+# and whether they are present in the segbo dataset.
+
+# turn the marginal of phoible column into TRUE/FALSE
 df_values$Marginal <- as.logical(df_values$Marginal)
 
 ## Extract all marginal phonemes from Phoible
