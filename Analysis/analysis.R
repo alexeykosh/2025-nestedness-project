@@ -8,6 +8,25 @@
 # II. Visualization of the inventory matrices themselves
 # III. Analysis of borrowings with segbo
 
+# Refer to the section header comments to identify the required input datasets 
+# and the expected outputs of each section.
+
+# REQUIRED INPUT FILES:
+# 1. Phoible dataset (CLDF format):
+#    - values.csv: contains phoneme inventories (phoneme occurrences)
+#    - languages.csv: contains language metadata (family, Glottocode, etc.)
+#
+# 2. SegBo dataset:
+#    - SegBo database - Phonemes.csv: contains information on borrowed phonemes 
+#                                     across languages
+#
+# OPTIONAL (for loading precomputed results instead of running full simulations,
+# CSVs files on GitHub):
+#    - df_nodf_r00_new_value.csv, df_nodf_c0_new_value.csv   
+#       => Simulated + real NODF values
+#    - df_temp_r00.csv, df_temp_c0.csv  
+#       => Simulated + real Temperature values
+
 # ==== Libraries ====
 library(dplyr)
 library(ggplot2)
@@ -29,25 +48,42 @@ theme_set(theme_bw())
 
 # ==== Setting main parameters (alpha + nb of iterations) ====
 ALPHA_ <- 0.005
-N_ITER_ <- 10
+N_ITER_ <- 1000
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # I. NESTEDNESS METRICS ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# In this section, we create the list of selected language families in order to 
-# build phonological inventory matrices for each family. 
-# We then calculate the degree of nestedness for these families using NODF 
-# and Temperature from the oecosimu package. 
-# Finally, we use baselines and simulations (r00 and c0) to compare our results.
+# In this section, we create the list of selected language families 
+# (>= 4 languages) in order to build a phonological inventory binary matrix 
+# for each family. 
+# We then calculate the degree of nestedness for these matrices (families)
+# using NODF and Temperature from the oecosimu package. 
+# Finally, we use baselines and simulations (r00 and c0) to compare our results 
+# with the vegan R package.
 
 # This section can be run in one go and will compute both Temperature and NODF
+# for the 70 matrices (families) included in the study.
+
+# INPUT:
+# - values.csv : phoneme values per language from Phoible (cldf file)
+# - languages.csv : language metadata from Phoible (cldf file)
+#
+# OUTPUT:
+# Nestedness results using NODF and Temperature
+# - 4 CSV files containing simulated and real nestedness values:
+#     * df_nodf_r00.csv, df_nodf_c0.csv
+#     * df_temp_r00.csv, df_temp_c0.csv
+# - 2 combined plots (r00 and c0) for NODF and Temperature:
+#     * nodf_res_005.png, temp_res_005.png
+# - Distribution of simulations plots for selected families (optional)
+# - 2 CSV files obs_nodf.csv and obs_temp.csv with significance categories
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Useful functions ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Function for nestedness testing
+## ==== Function for nestedness testing ====
 nested_test <- function(family_list, 
                         function_type = nestednodf, 
                         shuffling_type = 'r00',
@@ -193,7 +229,7 @@ nested_test <- function(family_list,
   return(df_results)
 }
 
-## Function to process simulated data (for both baselines)
+## ==== Function to process simulated data (for both baselines) ====
 process_simulated <- function(df_r00, df_c0) {
   df_sim_r00 <- df_r00 %>% filter(Type == "simulated") %>% 
     mutate(Baseline = "r00")
@@ -210,7 +246,7 @@ process_simulated <- function(df_r00, df_c0) {
   return(list(df_sim = df_sim, sim_summary = sim_summary))
 }
 
-## Function to process real observed data and create significance categories
+## ==== Function to process real data and create significance categories ====
 process_real <- function(df_r00, df_c0, measure_label, alpha) {
   ## For r00
   df_obs_r00 <- df_r00 %>% group_by(Family) %>%
@@ -283,7 +319,7 @@ process_real <- function(df_r00, df_c0, measure_label, alpha) {
   return(df_obs_final)
 }
 
-## Function to plot combined (r00 and c0) observed data
+## ==== Function to plot combined (r00 and c0) observed data ====
 plot_combined <- function(df_obs_final, sim_summary, x_label) {
   # Reorder families by the number of languages (ascending order)
   fam_order <- df_obs_final %>%
@@ -374,7 +410,7 @@ plot_combined <- function(df_obs_final, sim_summary, x_label) {
           axis.ticks.y = element_blank(),
           plot.title = element_text(hjust = 0.5),
           legend.position = "none")
-  # Combine with patchwork
+  # Combine (with patchwork)
   combined_plot <- (p_r00 + p_c0) +
     plot_layout(ncol = 2, guides = "collect") +
     plot_annotation(theme = theme(plot.title = element_text(hjust = 0.5))) &
@@ -384,7 +420,7 @@ plot_combined <- function(df_obs_final, sim_summary, x_label) {
 
 
 
-## Function to plot the Gaussian distribution 
+## ==== Function to plot the simulation distribution for a selected family ==== 
 plot_distribution <- function(df_sim_r00, df_sim_c0, df_obs_r00, x_label,
                               selected_family, x_lim) {
   ########## CHANGE WHEN ENTIRE DATASET (NOT SELECTED FAMILY) #############
@@ -446,14 +482,15 @@ plot_distribution <- function(df_sim_r00, df_sim_c0, df_obs_r00, x_label,
 # 2. Loading and processing data ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Read Phoible data
-df_values <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/values.csv",
+## ==== Read Phoible data ====
+df_values <- read.csv("values.csv",
                       sep = ",",
                       header = TRUE)
-df_languages <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/languages.csv",
+df_languages <- read.csv("languages.csv",
                          sep = ",",
                          header = TRUE)
-## Generate list of families with at least 4 languages
+
+## ==== Generate list of families with at least 4 languages ====
 f_n <- df_languages %>%
   group_by(Family_Name) %>%
   summarise(n_l = n()) %>%
@@ -467,34 +504,37 @@ f_n <- df_languages %>%
 # 3. Run Nestedness Tests ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## To import the datasets with the 1,000 simulations already in github
+## ==== To import the datasets with the 1,000 simulations already in github ====
 # df_temp_c0 <- read.csv("df_temp_c0.csv")
 # df_temp_r00 <- read.csv("df_temp_r00.csv")
 # df_nodf_c0 <- read.csv("df_nodf_c0_new_value.csv")
 # df_nodf_r00 <- read.csv("df_nodf_r00_new_value.csv")
 
-# Run NODF tests
-# For r00
+# ==== Run NODF tests ====
+# 1) For r00
 df_nodf_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
                            function_type = nestednodf)
-# For c0
+# 2) For c0
 df_nodf_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
                            function_type = nestednodf)
 
-## Run Temperature tests
-# For r00
+# 3) Save simulated datasets results NODF (simulations rows + real rows) 
+write.csv(df_nodf_c0, "df_nodf_c0.csv", row.names = FALSE)
+write.csv(df_nodf_r00, "df_nodf_r00.csv", row.names = FALSE)
+
+
+## ==== Run Temperature tests ====
+# 1) For r00
 df_temp_r00 <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "r00",
                            function_type = nestedtemp)
-# For c0
+# 2) For c0
 df_temp_c0  <- nested_test(f_n, n_iter = N_ITER_, shuffling_type = "c0",
                            function_type = nestedtemp)
 
-
-# Save simulated datasets results for temp + NODF (simulations rows + real rows)
+# 3) Save simulated datasets results temp (simulations rows + real rows) 
 write.csv(df_temp_c0, "df_temp_c0.csv", row.names = FALSE)
 write.csv(df_temp_r00, "df_temp_r00.csv", row.names = FALSE)
-write.csv(df_nodf_c0, "df_nodf_c0.csv", row.names = FALSE)
-write.csv(df_nodf_r00, "df_nodf_r00.csv", row.names = FALSE)
+
 
 
 
@@ -502,17 +542,18 @@ write.csv(df_nodf_r00, "df_nodf_r00.csv", row.names = FALSE)
 # 4. Dataset Manipulation and Plotting ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## For NODF
-# Process simulated and observed NODF data (add significance)
+## ==== For NODF ====
+# 1) Process simulated and observed NODF data (add significance)
 df_nodf_r00_r <- df_nodf_r00 %>% mutate(significant = p_value <= ALPHA_)
 df_nodf_c0_r  <- df_nodf_c0 %>% mutate(significant = p_value <= ALPHA_)
 sim_nodf <- process_simulated(df_nodf_r00_r, df_nodf_c0_r)
 obs_nodf <- process_real(df_nodf_r00_r, df_nodf_c0_r, "NODF", ALPHA_)
-# Create combined NODF plot 
+
+# 2) Create combined NODF plot 
 plot_nodf <- plot_combined(obs_nodf, sim_nodf$sim_summary, "NODF")
 
 
-# Create NODF distribution plot for a selected family
+# 3) Create NODF distribution plot for a selected family
 dist_nodf <- plot_distribution(
   df_nodf_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
   df_nodf_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
@@ -520,28 +561,26 @@ dist_nodf <- plot_distribution(
 )
 
 
-## For Temperature
-# Process simulated and observed Temperature data (add significance)
+## ==== For Temperature ====
+# 1) Process simulated and observed Temperature data (add significance)
 df_temp_r00_r <- df_temp_r00 %>% mutate(significant = p_value <= ALPHA_)
 df_temp_c0_r  <- df_temp_c0 %>% mutate(significant = p_value <= ALPHA_)
 sim_temp <- process_simulated(df_temp_r00_r, df_temp_c0_r)
 obs_temp <- process_real(df_temp_r00_r, df_temp_c0_r, "Temperature", ALPHA_)
-# Create combined Temperature plot
+
+# 2) Create combined Temperature plot
 plot_temp <- plot_combined(obs_temp, sim_temp$sim_summary, "Temperature")
 plot_temp 
 
-# Create Temperature distribution plot for a selected family
+# 3) Create Temperature distribution plot for a selected family
 dist_temp <- plot_distribution(
   df_temp_r00 %>% filter(Type == "simulated") %>% mutate(Baseline = "r00"),
   df_temp_c0 %>% filter(Type == "simulated") %>% mutate(Baseline = "c0"),
   obs_temp, "Temperature", "Algic", c(20,65)
 )
 
-# Display the plots
-plot_nodf 
-plot_temp
 
-# Save final dataset results for temp and NODF
+# ==== Save final dataset results for temp and NODF ====
 write.csv(obs_nodf, "obs_nodf.csv", row.names = FALSE)
 write.csv(obs_temp, "obs_temp.csv", row.names = FALSE)
 
@@ -549,23 +588,23 @@ write.csv(obs_temp, "obs_temp.csv", row.names = FALSE)
 # 5. Display the Plots ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Save combined plots for NODF and Temperature
+# ==== Display the plots ====
+plot_nodf 
+plot_temp
 
-# ggsave('nodf_res_005.png', 
-#        plot=plot_nodf,
-#        width=14, 
-#        height=10,
-#        scale=0.9,
-#        bg='white')
-# ggsave('temp_res_005.png', 
-#        plot=plot_temp,
-#        width=14,
-#        height=10,
-#        scale=0.9,
-#        bg='white')
-
-
-
+## ==== Save combined plots for NODF and Temperature ====
+ggsave('nodf_res_005.png',
+       plot=plot_nodf,
+       width=14,
+       height=10,
+       scale=0.9,
+       bg='white')
+ggsave('temp_res_005.png',
+       plot=plot_temp,
+       width=14,
+       height=10,
+       scale=0.9,
+       bg='white')
 
 
 
@@ -574,15 +613,26 @@ write.csv(obs_temp, "obs_temp.csv", row.names = FALSE)
 #  II. MATRIX ANALYSIS AND VISUALISATION ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# This section displays the phonological inventory matrices.
+# This section displays the phonological inventory matrices (real or simulated).
 # Some of these functions / bits of code are not essential for the final analysis
 # and can be deleted 
+
+# INPUT (already loaded in section I):
+# - values.csv : phoneme values per language from Phoible (cldf file)
+# - languages.csv : language metadata from Phoible (cldf file)
+#
+# OUTPUT:
+# - Sorted and visualized inventory matrices (real and simulated)
+# - PNG figures for:
+#     * Big families' matrices (panel_big_families_matrices.png)
+#     * Real + simulated matrix panels (panel_Mande_r00.png / panel_Mande_c0.png)
+# - Side-by-side visual comparison (original vs sorted matrices)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Function Definitions ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Function to sort a matrix by rows and columns sums
+## ==== Function to sort a matrix by rows and columns sums ====
 sort_matrix <- function(M, iterations = 100) {
   # Perform iterative sorting to stabilize the order
   for (i in seq_len(iterations)) {
@@ -598,7 +648,7 @@ sort_matrix <- function(M, iterations = 100) {
   return(M)
 }
 
-## Function to plot a matrix
+## ==== Function to plot a matrix ====
 plot_matrix <- function(mat, title = "") {
   # Convert the matrix to long format for ggplot
   df <- melt(mat)
@@ -625,7 +675,7 @@ plot_matrix <- function(mat, title = "") {
 }
 
 
-## Function to extract the binary matrix for a family 
+## ==== Function to extract the binary matrix for a family ====
 get_family_matrix <- function(family_name, 
                               values = df_values, 
                               languages = df_languages) {
@@ -680,7 +730,7 @@ get_family_matrix <- function(family_name,
   return(binary_matrix)
 }
 
-## Function to simulate matrices using r00
+## ==== Function to simulate matrices using r00 ====
 simulate_r00 <- function(real_mat, n_sim = 3, sort_iter = 1000) {
   # Calculate the fill probability
   fill_prob <- sum(real_mat) / (nrow(real_mat) * ncol(real_mat))
@@ -705,7 +755,7 @@ simulate_r00 <- function(real_mat, n_sim = 3, sort_iter = 1000) {
 }
 
 
-## Function to simulate matrices using c0
+## ==== Function to simulate matrices using c0 ====
 simulate_c0 <- function(real_mat, n_sim = 3, sort_iter = 1000) {
   # calculate the probability for each column (fraction of 1s in that column)
   col_probs <- colSums(real_mat) / nrow(real_mat)
@@ -732,7 +782,7 @@ simulate_c0 <- function(real_mat, n_sim = 3, sort_iter = 1000) {
   return(sim_plots)
 }
 
-## Function to arrange and display a panel of plots (real + simulated)
+## ==== Function to arrange and display a panel of plots (real + simulated) ====
 plot_panel <- function(real_plot, sim_plots, ncol = 2) {
   # Combine real plot with simulated plots
   all_plots <- c(list(real_plot), sim_plots)
@@ -748,82 +798,87 @@ plot_panel <- function(real_plot, sim_plots, ncol = 2) {
 # 2. Panel for big families matrices ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# ## Select the biggest families
-# selected_big_families <- families_class$Family_Name[1:6]
-# print(selected_big_families)
-# # For each selected family, extract, sort, and plot the binary matrix
-# big_families_plots <- lapply(selected_big_families, function(fam) {
-#   bin_mat <- get_family_matrix(fam)
-#   sorted_mat <- sort_matrix(bin_mat, iterations = 1000)
-#   plot_matrix(sorted_mat, fam)
-# })
-# # Create a panel 
-# panel_big_families <- arrangeGrob(grobs = big_families_plots, ncol = 3)
-# grid.arrange(panel_big_families)
+## ==== Select the biggest families ====
+selected_big_families <- families_class$Family_Name[1:6]
+print(selected_big_families)
 
-# To save the panel:
-# ggsave(filename = "panel_big_families_matrices.png",
-#        plot = panel_big_families,
-#        width = 20,
-#        height = 12, dpi = 300)
+# ==== For each selected family, extract, sort, and plot the binary matrix ====
+big_families_plots <- lapply(selected_big_families, function(fam) {
+  bin_mat <- get_family_matrix(fam)
+  sorted_mat <- sort_matrix(bin_mat, iterations = 1000)
+  plot_matrix(sorted_mat, fam)
+})
+
+# ==== Create a panel ====
+panel_big_families <- arrangeGrob(grobs = big_families_plots, ncol = 3)
+grid.arrange(panel_big_families)
+
+# ==== Save the panel ====
+ggsave(filename = "panel_big_families_matrices.png",
+       plot = panel_big_families,
+       width = 20,
+       height = 12, dpi = 300)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 3. Display a single family matrix (unsorted and sorted) ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# ## Example : the binary matrix for the family "Uralic"
-# uralic_matrix <- get_family_matrix("Uralic")
-# # Plot the original (unsorted) inventory matrix
-# p_original_uralic <- plot_matrix(uralic_matrix, "Original Uralic Matrix")
-# # print(p_original_uralic)
-# # Plot the sorted matrix
-# sorted_uralic_matrix <- sort_matrix(uralic_matrix, iterations = 1000)
-# p_sorted_uralic <- plot_matrix(sorted_uralic_matrix, "Sorted Uralic Matrix")
-# # print(p_sorted_uralic)
-# # To display both plots side by side 
-# p_original_uralic + p_sorted_uralic
+## ==== Select the family (here "Uralic") ====
+uralic_matrix <- get_family_matrix("Uralic")
+
+# ==== Plot the original (unsorted) inventory matrix ====
+p_original_uralic <- plot_matrix(uralic_matrix, "Original Uralic Matrix")
+# print(p_original_uralic)
+
+# ==== Plot the sorted matrix ====
+sorted_uralic_matrix <- sort_matrix(uralic_matrix, iterations = 1000)
+p_sorted_uralic <- plot_matrix(sorted_uralic_matrix, "Sorted Uralic Matrix")
+# print(p_sorted_uralic)
+
+# ==== To display both plots side by side ====
+p_original_uralic + p_sorted_uralic
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 4. Panel of the simulated matrices (r00 and c0) ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-##Simulated matrices for a big family (small variations in nestedness values)##
+# ==== Extract and sort the real matrix ====
+real_mat_big <- get_family_matrix("Mande")
+real_sorted_big <- sort_matrix(real_mat_big, iterations = 10000)
+p_real_big <- plot_matrix(real_sorted_big, "Mande")
 
-# # Extract and sort the real matrix 
-# real_mat_big <- get_family_matrix("Mande")
-# real_sorted_big <- sort_matrix(real_mat_big, iterations = 10000)
-# p_real_big <- plot_matrix(real_sorted_big, "Mande")
-# 
-# ## Simulate matrices using the r00 model 
-# set.seed(123)  
-# sim_plots_big_r00 <- simulate_r00(real_mat_big, 
-#                                   n_sim = 3, 
-#                                   sort_iter = 1000)
-# panel_big_r00 <- plot_panel(p_real_big, 
-#                             sim_plots_big_r00, 
-#                             ncol = 2)
-# To save the panel: 
-# ggsave(filename = "panel_Mande_r00.png",
-#        plot = panel_big_r00,
-#        width = 12, height = 10,
-#        dpi = 300)
+## ==== Simulate matrices using the r00 model ====
+set.seed(123)
+sim_plots_big_r00 <- simulate_r00(real_mat_big,
+                                  n_sim = 3,
+                                  sort_iter = 1000)
+panel_big_r00 <- plot_panel(p_real_big,
+                            sim_plots_big_r00,
+                            ncol = 2)
 
-# ## Simulate matrices using the c0 model for "Mande"
-# set.seed(123)
-# sim_plots_big_c0 <- simulate_c0(real_mat_big, 
-#                                 n_sim = 3, 
-#                                 sort_iter = 1000)
-# p_real_big_c0 <- plot_matrix(real_sorted_big, "Mande")
-# panel_big_c0 <- plot_panel(p_real_big_c0, 
-#                            sim_plots_big_c0, 
-#                            ncol = 2)
-# To save the panel: 
-# ggsave(filename = "panel_Mande_c0.png",
-#        plot = panel_big_c0,
-#        width = 12,
-#        height = 10,
-#        dpi = 300)
+# ==== To save the panel ====
+ggsave(filename = "panel_Mande_r00.png",
+       plot = panel_big_r00,
+       width = 12, height = 10,
+       dpi = 300)
+
+## ==== Simulate matrices using the c0 model ====
+set.seed(123)
+sim_plots_big_c0 <- simulate_c0(real_mat_big,
+                                n_sim = 3,
+                                sort_iter = 1000)
+p_real_big_c0 <- plot_matrix(real_sorted_big, "Mande")
+panel_big_c0 <- plot_panel(p_real_big_c0,
+                           sim_plots_big_c0,
+                           ncol = 2)
+
+# ==== To save the panel ====
+ggsave(filename = "panel_Mande_c0.png",
+       plot = panel_big_c0,
+       width = 12,
+       height = 10,
+       dpi = 300)
 
 
 
@@ -839,16 +894,28 @@ plot_panel <- function(real_plot, sim_plots, ncol = 2) {
 
 # This analysis is not complete, and this code mainly serves to determine 
 # the number of borrowings in the overlap, as well as to gather additional 
-# information, without deeply analyzing the contribution of borrowings 
-# to nestedness.
+# information, without deeply analyzing the contribution (positive or negative) 
+# of borrowings to nestedness.
+
+# INPUT:
+# - SegBo dataset: "SegBo database - Phonemes.csv"
+# - Phoible values and languages (values.csv and languages.csv, 
+#   already loaded in section I)
+#
+# OUTPUT:
+# - Visualization of borrowed phonemes in inventories:
+#     * matrix_borrowings_Austronesian.png
+# - Overlap dataset of borrowed phonemes across major families
+# - Summary tables of borrowing counts per family
+# - Analysis of marginal phonemes in Phoible vs SegBo presence
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Load SegBo dataset ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# Import segbo dataset
+# ==== Import segbo dataset ====
 df_segbo <- read.csv(
-  "data/SegBo database - Phonemes.csv",
+  "SegBo database - Phonemes.csv",
   sep  = ",",
   header   = TRUE,
   stringsAsFactors  = FALSE
@@ -868,7 +935,7 @@ df_segbo <- read.csv(
 # 2. Functions ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## Function to plot a matrix with its borrowed phonemes
+## ==== Function to plot a matrix with its borrowed phonemes ====
 plot_family_borrowed <- function(family_name, df_segbo, sort_iter = 1000) {
   # Extract the matrix and sort it
   mat        <- get_family_matrix(family_name)
@@ -883,11 +950,11 @@ plot_family_borrowed <- function(family_name, df_segbo, sort_iter = 1000) {
     mutate(
       status = factor(
         case_when(
-          present == 0                 ~ "absent", 
+          present == 0 ~ "absent", 
           # absent if phoneme not in inventory
           present == 1 & borrowed == 1 ~ "borrowed",
           # borrowed if in inventory and flagged by SegBo
-          TRUE                          ~ "present"
+          TRUE ~ "present"
           # present if in inventory but not marked as borrowed
         ),
         levels = c("absent", "present", "borrowed")
@@ -918,7 +985,7 @@ plot_family_borrowed <- function(family_name, df_segbo, sort_iter = 1000) {
     )
 }
 
-## Function to retrieve various datasets about borrowings for a given family
+## ==== Function for various datasets about borrowings for a given family ====
 get_family_data <- function(family_name, sort_iter = 1000) {
   # 1) Extract the matrix and sort it
   mat        <- get_family_matrix(family_name)
@@ -956,41 +1023,41 @@ get_family_data <- function(family_name, sort_iter = 1000) {
 # 3. Get segbo data overlap for a family ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# ## Select a family and get its matrix
-# res_austronesian   <- get_family_data("Austronesian")
-# # Sorted binary presence matrix
-# austronesian_df       <- res_austronesian$df_matrix 
-# # long-format (present==1)
-# austronesian_long_present<- res_austronesian$df_long
-# # Full join with SegBo
-# austronesian_merge_segbo <- res_austronesian$merge_segbo
-# # keep only (language, features)
-# austronesian_segbo_inter <- res_austronesian$segbo_inter     
-# 
-# ## Plot the matrix with its borrowed phonemes
-# plot_austronesian <- plot_family_borrowed("Austronesian", df_segbo)
-# print(plot_austronesian)
+## ==== Select a family and get its matrix ====
+res_austronesian   <- get_family_data("Austronesian")
+# 1) Sorted binary presence matrix
+austronesian_df       <- res_austronesian$df_matrix
+# 2) long-format (present==1)
+austronesian_long_present<- res_austronesian$df_long
+# 3) Full join with SegBo
+austronesian_merge_segbo <- res_austronesian$merge_segbo
+# 4) keep only (language, features)
+austronesian_segbo_inter <- res_austronesian$segbo_inter
 
-# ## To save the plot:
-# ggsave(filename = "matrix_borrowings_Austronesian.png",
-#        plot = plot_austronesian,
-#        width = 10,
-#        height = 8,
-#        dpi = 300)
+## ==== Plot the matrix with its borrowed phonemes ====
+plot_austronesian <- plot_family_borrowed("Austronesian", df_segbo)
+print(plot_austronesian)
+
+## ==== To save the plot ====
+ggsave(filename = "matrix_borrowings_Austronesian.png",
+       plot = plot_austronesian,
+       width = 10,
+       height = 8,
+       dpi = 300)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 4. Create the full dataset overlap Segbo / Phoible ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## (Re)load Phoible data if necessary
-df_values <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/values.csv",
+## ==== (Re)load Phoible data if necessary ====
+df_values <- read.csv("values.csv",
                       sep = ",",
                       header = TRUE)
-df_languages <- read.csv("data/cldf-datasets-phoible-f36deac/cldf/languages.csv",
+df_languages <- read.csv("languages.csv",
                          sep = ",",
                          header = TRUE)
 
-## list of families that have at least 10 languages 
+## ==== list of families that have at least 10 languages ====
 ## (otherwise not enough statistical power to study borrowings)
 fam_list <- df_languages %>%
   filter(Family_Name != "", Family_Name != "Bookkeeping") %>%
@@ -998,7 +1065,7 @@ fam_list <- df_languages %>%
   filter(n > 9) %>%
   pull(Family_Name)
 
-## Create the overlap dataset
+## ==== Create the overlap dataset ====
 all_segbo_inter <- map_dfr(fam_list, function(fam) {
   # Retrieve and sort the binary phoneme matrix for this family
   mat <- get_family_matrix(fam, values = df_values, languages = df_languages)
@@ -1016,12 +1083,12 @@ all_segbo_inter <- map_dfr(fam_list, function(fam) {
     mutate(family = fam)
 })
 
-## Compute number of languages per family
+## ==== Compute number of languages per family ====
 family_sizes <- df_languages %>%
   filter(Family_Name != "", Family_Name != "Bookkeeping") %>%
   count(Family_Name, name = "n_languages")
 
-## Summarize borrowings by family sorting by family size
+## ==== Summarize borrowings by family sorting by family size ====
 # count borrowings per family
 borrow_counts <- all_segbo_inter %>%
   count(family, name = "n_borrowings")
@@ -1046,7 +1113,7 @@ fam_overlap <- big_families %>%
 # turn the marginal of phoible column into TRUE/FALSE
 df_values$Marginal <- as.logical(df_values$Marginal)
 
-## Extract all marginal phonemes from Phoible
+## ==== Extract all marginal phonemes from Phoible ====
 marginal_phoible_df <- df_values %>%
   filter(Marginal) %>%
   transmute(language = Language_ID,
